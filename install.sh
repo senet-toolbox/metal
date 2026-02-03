@@ -3,7 +3,7 @@ set -e
 
 # macOS install script for metal-cli
 INSTALL_DIR="/usr/local/bin"
-REPO="tether-labs/metal"
+REPO="senet-toolbox/metal"
 VERSION="v1.0.6"
 TARBALL="metal-1.0.6-darwin-arm64.tar.gz"
 BINARY_NAME="metal"
