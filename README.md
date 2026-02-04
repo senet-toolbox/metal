@@ -3,7 +3,7 @@
 Run this command to install metal-cli on your macOS (Apple Silicon):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/tether-labs/metal/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh | bash
 ```
 
 ## What this does:

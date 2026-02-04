@@ -4,8 +4,8 @@ set -e
 # macOS install script for metal-cli
 INSTALL_DIR="/usr/local/bin"
 REPO="senet-toolbox/metal"
-VERSION="v1.0.6"
-TARBALL="metal-1.0.6-darwin-arm64.tar.gz"
+VERSION="v1.0.8"
+TARBALL="metal-1.0.8-darwin-arm64.tar.gz"
 BINARY_NAME="metal"
 
 echo "Installing Metal Cli..."
@@ -36,11 +36,11 @@ cd /tmp
 tar -xzf $TARBALL
 
 # Copy binary from the extracted structure
-sudo cp metal-1.0.6-darwin-arm64/bin/$BINARY_NAME $INSTALL_DIR/
+sudo cp metal-1.0.8-darwin-arm64/bin/$BINARY_NAME $INSTALL_DIR/
 sudo chmod +x $INSTALL_DIR/$BINARY_NAME
 
 # Cleanup
-rm -rf /tmp/$TARBALL /tmp/metal-1.0.6-darwin-arm64
+rm -rf /tmp/$TARBALL /tmp/metal-1.0.8-darwin-arm64
 
 echo "Metal installed successfully!"
 echo "You can now run: metal"
