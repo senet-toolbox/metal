@@ -1,0 +1,17 @@
+# Zig build output
+.zig-cache/
+zig-cache/
+zig-out/
+
+# Fetched dependencies. Zig 0.16 materialises these under the build root
+# rather than the global cache, and regenerates them on every build.
+zig-pkg/
+
+# Release tarballs, built locally before upload
+*.tar.gz
+
+# Claude Code local overrides
+.claude/settings.local.json
+
+# macOS
+.DS_Store

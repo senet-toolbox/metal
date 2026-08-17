@@ -1,0 +1,19 @@
+.{
+    // `metal create` rewrites .name, .version and .fingerprint per project.
+    // The placeholders below are never shipped as-is: Zig validates the high 32
+    // bits of the fingerprint as CRC-32 of the name, and treats the whole value
+    // as a globally unique package id, so two projects must never share one.
+    .name = .metal_project_name,
+    .version = "0.0.0",
+    .fingerprint = 0x0000000000000000, // Changing this has security and trust implications.
+    .minimum_zig_version = "0.16.0",
+    // `metal create` runs `zig fetch --save=vapor` after scaffolding, which
+    // fills this in with the current release. Do not pre-declare vapor here:
+    // `--save` would keep the existing field name and write a URL into it.
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
