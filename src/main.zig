@@ -1267,6 +1267,15 @@ test "dev server defaults to loopback" {
     try std.testing.expectEqualStrings("127.0.0.1", (ReverbConfig{}).host);
 }
 
+/// The page for a path with no prerendered file. vapor >= 2.1 writes
+/// release/app.html, a client-rendered shell that renders any route (dynamic
+/// ones, and /error for unknown paths); older releases only have the
+/// prerendered home page, which would hydrate as the wrong route.
+fn releaseFallback() []const u8 {
+    std.Io.Dir.cwd().access(main_init.io, "release/app.html", .{}) catch return "./release/index.html";
+    return "./release/app.html";
+}
+
 /// Whether a request is a page navigation. Browsers send `text/html` in Accept
 /// when navigating; fetch() sends `*/*` unless told otherwise.
 fn acceptsHtml(accept: []const u8) bool {
@@ -1505,7 +1514,7 @@ fn handleRequest(ctx: *Reverb.Context) !void {
                     return;
                 }
                 // Fallback: in release mode serve the root index, in dev serve template
-                const fallback = if (generate or static_mode) "./release/index.html" else "./template.html";
+                const fallback = if (generate or static_mode) releaseFallback() else "./template.html";
                 break :blk cwd.openFile(main_init.io, fallback, .{}) catch |fallback_err| {
                     std.debug.print("Opening file: {any} {s}\n", .{ fallback_err, fallback });
                     try ctx.ERROR(404, "Not found");
@@ -1519,7 +1528,7 @@ fn handleRequest(ctx: *Reverb.Context) !void {
             try ctx.ERROR(404, "Not found");
             return;
         }
-        const fallback = if (generate or static_mode) "./release/index.html" else "./template.html";
+        const fallback = if (generate or static_mode) releaseFallback() else "./template.html";
         break :blk cwd.openFile(main_init.io, fallback, .{}) catch |fallback_err| {
             std.debug.print("Opening file: {any} {s}\n", .{ fallback_err, fallback });
             try ctx.ERROR(404, "Not found");
