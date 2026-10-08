@@ -16,19 +16,17 @@ const Time = @import("Time.zig");
 const Ansi = MetalUI.Ansi;
 
 /// Disable colors when stdout isn't a TTY or NO_COLOR is set in the env.
+/// Colour and cursor codes only for a terminal. Everything metal prints goes
+/// through std.debug.print, i.e. stderr, so that is the stream to test.
+/// NO_COLOR (https://no-color.org) turns them off regardless.
 fn applyColorPolicy() void {
-    // var no_color = false;
-    // if (std.process.hasEnvVarConstant("NO_COLOR")) {
-    //     no_color = true;
-    // }
-    // stdout = fd 1; if it's not a tty, strip colors so logs/pipes stay clean.
-    // if (!std.posix.isatty(1)) no_color = true;
-    // if (no_color) {
-    //     MetalUI.Ansi.disable();
-    //     TechyUI.Ansi.disable();
-    //     SpinnerUI.Color.disable();
-    //     SpinnerUI.Cursor.disable();
-    // }
+    const no_color = main_init.environ_map.contains("NO_COLOR") or !posix.isatty(2);
+    if (no_color) {
+        MetalUI.Ansi.disable();
+        TechyUI.Ansi.disable();
+        SpinnerUI.Color.disable();
+        SpinnerUI.Cursor.disable();
+    }
 }
 
 const Command = enum {
@@ -1707,9 +1705,6 @@ fn run() !u8 {
     // const allocator = main_init.arena.allocator(); // or use init.gpa
     const args = try main_init.minimal.args.toSlice(allocator);
 
-    if (main_init.environ_map.contains("NO_COLOR")) {
-        // disable color
-    }
     applyColorPolicy();
 
     // A bare `metal` is a request for help, not a mistake.
