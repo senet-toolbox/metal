@@ -151,23 +151,39 @@ same text and copyright line as vapor, which is the only sibling that had one.
 source) is deleted; the repo is 58 MB now, and a first commit would be 32 files
 / 548 KB.
 
+### Session 2026-10-08 (launch prep)
+
+- **JS runtime moved into vapor** (`vapor/js/src`, built to `js/dist`,
+  named lazy path `runtime`). metal no longer embeds `bundle.min.js`; the
+  scaffold's build.zig installs vapor's copy to `zig-out/bin/`, and the dev
+  server serves `/bundle.min.js` from there. vapor's `zig build test` runs
+  `check-abi` (every `extern fn` must exist in the bundle).
+- `vapor_ref` in `src/main.zig` pins new apps; `"main"` until vapor is tagged,
+  and release.yml refuses to ship with `"main"`.
+- `metal vapor create <name> --vapor-path <dir>` for local vapor work.
+- `gen` was broken twice over (unflushed writer → empty files; fabric-era
+  templates). Rewritten for vapor 2: page, component, card, button, fetch.
+- Linux works: builds, runs (Docker-verified), CI checks it. Scaffold
+  generator needed `link_libc` on Linux.
+- CI (`ci.yml`), release (`release.yml`, tag `v*`), `install.sh` (no sudo,
+  checksum-verified, macOS+Linux, arm64+x86_64). Version lives only in
+  build.zig.zon.
+- Testing helpers worth recreating: headless Chrome via CDP (Node 22 has
+  global WebSocket) to click through generated apps; Alpine container with
+  Zig 0.16 for Linux e2e.
+
 ### Known issues remaining
 
-1. **No CI.** The `test` step exists now; copy vapor's
-   `.github/workflows/ci.yml` next.
-2. **No `check` step.** vapor's `src/check.zig` trick would have caught
-   `channel.zig` years earlier; metal-cli still has no equivalent, and no Linux
-   build check.
-3. **`.reverb = .{ .path = "../reverb" }`** in `build.zig.zon` — metal-cli only
-   builds next to a sibling `reverb` checkout. Deliberate for now (dogfooding,
-   reverb still private); switch to a `git+https` pin when reverb goes public.
-   reverb's `Server.new` dropped its tracking-allocator argument on main
-   (2026-10); metal's two call sites are updated.
-4. `src/main.zig` is ~1,660 lines and holds command dispatch; not yet read
-   closely.
-5. `zig build -Dgenerate=true` in a scaffolded app prints `Copy error:
-   error.FileNotFound` before succeeding. Comes from vapor
-   (`src/lib/Vapor.zig:1415`), not metal-cli.
+1. **reverb is private**, so CI needs a `REVERB_TOKEN` secret and `zig fetch`
+   cannot pin it yet. Switch `.reverb` to a `git+https` pin once public.
+2. **Distribution repo.** install.sh and `metal upgrade` use
+   `senet-toolbox/metal` (the old binaries-only repo); release.yml publishes
+   to whichever repo runs it. Plan: rename metal-cli → metal on GitHub.
+3. **senet-website still loads its own `web/*.js`**, now a second copy of the
+   runtime that will drift from vapor's. It should consume vapor's.
+4. Backend gen templates (`crud`, `crudfull`, `database`) still
+   `@import("tether")` — reverb's old name; not updated or tested.
+5. `metal add auth` points at `tether-labs/auth`, which does not exist.
 
 ### Follow-up for vapor, not metal-cli
 
