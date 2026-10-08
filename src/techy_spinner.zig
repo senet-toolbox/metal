@@ -63,7 +63,16 @@ pub const Ansi = struct {
     pub var bg_cyan: []const u8 = "\x1b[46m";
     pub var bg_white: []const u8 = "\x1b[47m";
 
+    /// False once disable() runs; gates the hardcoded 256-colour gradients.
+    pub var enabled: bool = true;
+
+    /// `code` when colour is on, "" otherwise.
+    pub fn paint(code: []const u8) []const u8 {
+        return if (enabled) code else "";
+    }
+
     pub fn disable() void {
+        enabled = false;
         hide_cursor = "";
         show_cursor = "";
         save_cursor = "";
@@ -490,7 +499,7 @@ pub const BuildDisplay = struct {
 
             // Build the display
             std.debug.print("{s}{s}{s}{s} ", .{
-                gradient[color_idx],
+                Ansi.paint(gradient[color_idx]),
                 Ansi.bold,
                 spinner,
                 Ansi.reset,
@@ -516,7 +525,7 @@ pub const BuildDisplay = struct {
             // Filled portion with gradient
             for (0..filled) |i| {
                 const grad_idx = (i * gradient.len) / bar_width;
-                std.debug.print("{s}━", .{gradient[grad_idx]});
+                std.debug.print("{s}━", .{Ansi.paint(gradient[grad_idx])});
             }
 
             // Empty portion
@@ -567,7 +576,7 @@ pub fn showStartupSequence(project_name: []const u8) void {
 
     for (banner, 0..) |line, i| {
         std.debug.print("    {s}{s}{s}{s}\n", .{
-            gradient[i % gradient.len],
+            Ansi.paint(gradient[i % gradient.len]),
             Ansi.bold,
             line,
             Ansi.reset,

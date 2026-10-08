@@ -33,6 +33,9 @@ pub const Config = struct {
     /// for it to exit.  The process is killed before the next rebuild.
     /// Useful for backend frameworks that are their own server.
     run_after_build: ?[]const []const u8 = null,
+    /// Build once before watching. Off when the caller has just built, as
+    /// `metal vapor run` does before starting its server.
+    initial_build: bool = true,
 };
 
 const InputState = struct {
@@ -482,8 +485,7 @@ fn watchFiles(self: *WatchContext) !void {
     // Initial file scan to populate mod times
     _ = try self.scanForChanges();
 
-    // Initial build
-    try self.buildAndRun();
+    if (self.config.initial_build) try self.buildAndRun();
 
     // Show server ready message
     ui.serverReady(self.config.app_port);

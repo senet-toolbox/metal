@@ -33,13 +33,17 @@ pub fn forgetRawMode() void {
     raw_mode_fd = -1;
 }
 
+/// Cleared by main's colour policy when output is not a terminal. Read from
+/// the signal handler, which a plain bool load keeps async-signal-safe.
+pub var emit_escapes: bool = true;
+
 fn restoreTerminal() void {
     if (saved_termios) |t| {
         // tcsetattr is async-signal-safe on POSIX.
         std.posix.tcsetattr(raw_mode_fd, .NOW, t) catch {};
     }
     // Show cursor + reset SGR + newline so the next prompt isn't glued to output.
-    const reset_seq: []const u8 = "\x1b[?25h\x1b[0m\n";
+    const reset_seq: []const u8 = if (emit_escapes) "\x1b[?25h\x1b[0m\n" else "\n";
     _ = std.c.write(1, reset_seq.ptr, reset_seq.len);
 }
 

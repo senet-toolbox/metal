@@ -26,6 +26,7 @@ fn applyColorPolicy() void {
         TechyUI.Ansi.disable();
         SpinnerUI.Color.disable();
         SpinnerUI.Cursor.disable();
+        @import("proc_state.zig").emit_escapes = false;
     }
 }
 
@@ -1933,8 +1934,6 @@ fn run() !u8 {
             const server_thread = try std.Thread.spawn(.{}, initServer, .{ host, effective_port, local_allocator1 });
             server_thread.detach();
 
-            MetalUI.printListening(effective_port);
-
             // Give the server a moment to bind
             Time.sleep(500 * std.time.ns_per_ms);
 
@@ -1948,6 +1947,8 @@ fn run() !u8 {
                 .process_environ = main_init.minimal.environ,
                 .start_websocket_server = false,
                 .notify_websocket = sendDevWsText,
+                // runBuild above already built; the watcher prints "ready".
+                .initial_build = false,
             }) catch |err| {
                 MetalUI.printError("Watcher failed", @errorName(err));
                 return ExitCode.failure;

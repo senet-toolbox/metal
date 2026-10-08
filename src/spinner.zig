@@ -38,7 +38,11 @@ pub const Color = struct {
     pub var bg_cyan: []const u8 = "\x1b[46m";
     pub var bg_magenta: []const u8 = "\x1b[45m";
 
+    /// False once disable() runs; gates the hardcoded 256-colour gradient.
+    pub var enabled: bool = true;
+
     pub fn disable() void {
+        enabled = false;
         reset = "";
         bold = "";
         dim = "";
@@ -381,7 +385,7 @@ pub const ReloadAnimation = struct {
         };
 
         while (self.running) {
-            const color = gradient[frame % gradient.len];
+            const color = if (Color.enabled) gradient[frame % gradient.len] else "";
             const spinner = reload_frames[frame % reload_frames.len];
 
             std.debug.print("{s}{s}{s}{s}{s} {s}{s}", .{
