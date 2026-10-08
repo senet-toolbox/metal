@@ -10,15 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# metal depends on reverb by `.path = "../reverb"`, so every job checks both
-# out side by side: $GITHUB_WORKSPACE/metal-cli and $GITHUB_WORKSPACE/reverb.
-#
-# The reverb commit is pinned here so CI tests a known pair. While reverb is
-# private, REVERB_TOKEN must be a token that can read it; once it is public the
-# fallback to github.token is enough.
-env:
-  REVERB_REF: 57375b7e90e023d0eb32c1fdd9c62050aa0c876c
-
 jobs:
   build:
     strategy:
@@ -26,19 +17,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: metal-cli
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: metal-cli
-      - uses: actions/checkout@v4
-        with:
-          repository: senet-toolbox/reverb
-          ref: ${{ env.REVERB_REF }}
-          token: ${{ secrets.REVERB_TOKEN || github.token }}
-          path: reverb
 
       # Pinned: metal tracks Zig closely and 0.16 removed APIs it uses.
       - uses: mlugg/setup-zig@v2
@@ -74,13 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          path: metal-cli
-      - uses: actions/checkout@v4
-        with:
-          repository: senet-toolbox/reverb
-          ref: ${{ env.REVERB_REF }}
-          token: ${{ secrets.REVERB_TOKEN || github.token }}
-          path: reverb
+          path: metal
       - uses: actions/checkout@v4
         with:
           repository: senet-toolbox/vapor
@@ -90,13 +64,13 @@ jobs:
           version: 0.16.0
 
       - name: Build metal
-        working-directory: metal-cli
+        working-directory: metal
         run: zig build
 
       - name: Create, build and generate an app
         run: |
           mkdir scratch && cd scratch
-          ../metal-cli/zig-out/bin/metal vapor create app --vapor-path ../vapor
+          ../metal/zig-out/bin/metal vapor create app --vapor-path ../vapor
           cd app
           zig build
           test -f zig-out/bin/vapor.wasm
@@ -107,12 +81,22 @@ jobs:
           # `! grep` would never fail the step: bash -e ignores negated commands.
           if grep -qi "error" generate.log; then exit 1; fi
 
+      # Exactly what a new user runs: fetches vapor at vapor_ref from GitHub.
+      - name: Default create uses the pinned vapor release
+        run: |
+          cd scratch
+          ../metal/zig-out/bin/metal vapor create pinned
+          cd pinned
+          zig build
+          zig build -Dgenerate=true
+          test -f release/index.html
+
       # Every vapor gen template must compile against vapor. Zig only analyses
       # code something references, so a page calls each generated file.
       - name: Generated code compiles
         working-directory: scratch/app
         run: |
-          metal=../../metal-cli/zig-out/bin/metal
+          metal=../../metal/zig-out/bin/metal
           $metal vapor gen page About
           $metal vapor gen component Counter
           $metal vapor gen card InfoCard

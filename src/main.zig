@@ -672,9 +672,9 @@ fn linkLocalVapor(project_dir: std.Io.Dir, dir_name: []const u8, vapor_abs: []co
 /// written against this version's API, so it moves together with them, not on
 /// its own: bump it when metal is released against a new vapor tag.
 ///
-/// "main" is the development placeholder; tag a vapor release and set it here
-/// before releasing metal.
-pub const vapor_ref = "main";
+/// Must name a vapor tag (`git tag` name, e.g. "v2.0.2"); release.yml refuses
+/// "main", which would let new apps float.
+pub const vapor_ref = "v2.0.2";
 
 const Packages = enum {
     auth,

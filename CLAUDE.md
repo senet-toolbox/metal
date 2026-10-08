@@ -1,4 +1,4 @@
-# metal-cli — working notes
+# metal — working notes
 
 Handoff from a long session spent hardening `vapor` (the sibling UI framework).
 This file exists so a fresh session starts informed instead of re-deriving.
@@ -10,7 +10,7 @@ All siblings under `~/Desktop/Zig/`:
 | repo | remote | what it is |
 | --- | --- | --- |
 | `vapor` | `senet-toolbox/vapor` | Zig → WebAssembly UI framework. **v2.0.1.** |
-| `metal-cli` | *(this)* | CLI: scaffolds apps, runs the dev server, adds packages |
+| `metal` (was `metal-cli`) | *(this)* | CLI: scaffolds apps, runs the dev server, adds packages |
 | `senet-website` | `vic-Rokx/tether-website` | the docs site; vapor's only production consumer |
 | `vaporize` | `tether-labs/vaporize` | utility layer, generates content from markdown |
 | `opaque-ui` | `senet-toolbox/opaque` | component library |
@@ -174,11 +174,12 @@ source) is deleted; the repo is 58 MB now, and a first commit would be 32 files
 
 ### Known issues remaining
 
-1. **reverb is private**, so CI needs a `REVERB_TOKEN` secret and `zig fetch`
-   cannot pin it yet. Switch `.reverb` to a `git+https` pin once public.
-2. **Distribution repo.** install.sh and `metal upgrade` use
-   `senet-toolbox/metal` (the old binaries-only repo); release.yml publishes
-   to whichever repo runs it. Plan: rename metal-cli → metal on GitHub.
+1. reverb is public (2026-10-08) and pinned by `git+https` commit in
+   build.zig.zon; CI no longer checks it out beside metal.
+2. **Distribution repo.** The folder is renamed `metal`, but on GitHub the
+   source is still the private `senet-toolbox/metal-cli` and
+   `senet-toolbox/metal` is the old binaries-only repo. install.sh and
+   `metal upgrade` use `senet-toolbox/metal`.
 3. **senet-website still loads its own `web/*.js`**, now a second copy of the
    runtime that will drift from vapor's. It should consume vapor's.
 4. Backend gen templates (`crud`, `crudfull`, `database`) still

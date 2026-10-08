@@ -10,27 +10,13 @@ on:
 permissions:
   contents: write
 
-env:
-  REVERB_REF: 57375b7e90e023d0eb32c1fdd9c62050aa0c876c
-
 jobs:
   release:
     # macOS, because cross-compiling to macOS needs the SDK (build.zig asks
     # xcrun for it); Linux targets cross-compile from here too.
     runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: metal-cli
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: metal-cli
-      - uses: actions/checkout@v4
-        with:
-          repository: senet-toolbox/reverb
-          ref: ${{ env.REVERB_REF }}
-          token: ${{ secrets.REVERB_TOKEN || github.token }}
-          path: reverb
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
