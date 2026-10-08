@@ -150,6 +150,13 @@ pub fn build(b: *std.Build) void {
     // next to it as zig-out/bin/bundle.min.js.
     const install_runtime = b.addInstallBinFile(vapor_dep.namedLazyPath("runtime"), "bundle.min.js");
     b.getInstallStep().dependOn(&install_runtime.step);
+    // Browser-API bindings (audio, canvas, geolocation, ...), which the runtime
+    // loads from beside itself only when the app uses one. vapor < 2.1 has none.
+    if (vapor_dep.builder.named_lazy_paths.get("runtime-browser")) |browser_runtime| {
+        const install_browser = b.addInstallBinFile(browser_runtime, "browser.min.js");
+        b.getInstallStep().dependOn(&install_browser.step);
+        install_runtime.step.dependOn(&install_browser.step);
+    }
 
     // Optional: wire up the HTML generator before compilation. It copies the
     // runtime into release/, so the runtime has to be installed first.

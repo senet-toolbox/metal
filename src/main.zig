@@ -1473,8 +1473,8 @@ fn handleRequest(ctx: *Reverb.Context) !void {
 
     // The JS runtime ships with vapor; the app's build installs the copy that
     // matches the wasm next to it.
-    if (std.mem.eql(u8, path, "/bundle.min.js")) {
-        path = "/zig-out/bin/bundle.min.js";
+    if (std.mem.eql(u8, path, "/bundle.min.js") or std.mem.eql(u8, path, "/browser.min.js")) {
+        path = try std.fmt.allocPrint(ra, "/zig-out/bin{s}", .{path});
     }
 
     // Remembered so the release-mode fallback below can retry without the
