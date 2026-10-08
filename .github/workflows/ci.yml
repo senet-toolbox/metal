@@ -141,6 +141,6 @@ jobs:
               UserList.render();
           }
           ZIG
-          sed -i 's|^\(\s*\)Vapor.Page(.{ .route = "/" }, Counter, null);|&\n\1@import("routes/About.zig").init();\n\1@import("routes/Showcase.zig").init();|' src/main.zig
+          sed -i 's|^\(\s*\)@import("routes/Page.zig").init();|&\n\1@import("routes/About.zig").init();\n\1@import("routes/Showcase.zig").init();|' src/main.zig
           grep -q 'routes/Showcase.zig' src/main.zig
           zig build

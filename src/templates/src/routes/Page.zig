@@ -1,11 +1,66 @@
+//! The home page, served at /.
+//!
+//! Each page registers its own route in init(); src/main.zig calls it.
+//! `metal vapor gen page <Name>` creates another one.
+
 const Vapor = @import("vapor");
+const Center = Vapor.Center;
+const Button = Vapor.Button;
 const Text = Vapor.Text;
 
 pub fn init() void {
-    Vapor.Page(.{ .src = @src() }, render, null);
+    Vapor.Page(.{ .route = "/" }, render, null);
+}
+
+var counter: u32 = 0;
+fn increment() void {
+    counter += 1;
+}
+
+// No state management
+var font_color: Vapor.Types.Color = .black;
+var is_hovered: bool = false;
+
+// Change font color on hover
+fn changeFontColor(_: *Vapor.Event) void {
+    is_hovered = !is_hovered;
+    font_color = if (is_hovered) .vapor_blue else .black;
 }
 
 fn render() void {
-    Text("Hello, world!").end();
-    // Content...
+
+    // Create a centered column with a heading and a button
+    Center().size(.full).direction(.column).items(.{
+        Text("Vapor")
+            .fontFamily("Bruno Ace")
+            .inlineStyle("-webkit-text-stroke: 12px black;", .{})
+            .shadow(Vapor.Types.NewShadow.init().drop(12, 12, 0, .rgba(255, 0, 255, 0.7)))
+            .duration(100)
+            .transform(if (is_hovered) .distAndScale(.up, 32, 1.1) else null)
+            .font(120, 300, font_color),
+
+        Center().spacing(32).width(.percent(100)).children({
+            // Create a button with an increment function
+            Button(increment, .{})
+                .duration(100)
+                .onHover(changeFontColor, .{})
+                .onLeave(changeFontColor, .{})
+                .hover(.{
+                    .background = .rgba(255, 0, 255, 0.7),
+                    .text_color = .white,
+                })
+                .cursor(.pointer)
+                .hw(.px(36), .px(120))
+                .children({
+                Text("Increment")
+                    .inlineStyle("-webkit-text-stroke: 8px black;", .{})
+                    .fontFamily("Bruno Ace")
+                    .fontSize(16).end();
+            });
+            // Create a text field with a counter value
+            Text(counter)
+                .width(.px(48))
+                .font(32, 700, .palette(.text)).end();
+        }),
+    });
 }

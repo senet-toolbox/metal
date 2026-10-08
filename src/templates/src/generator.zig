@@ -8,5 +8,5 @@ const Vapor = @import("vapor");
 pub fn main() !void {
     App.init();
     Vapor.lib.generate();
-    std.debug.print("\nSuccessfully generated Static Pages /static\n", .{});
+    std.debug.print("\nGenerated static pages in release/\n", .{});
 }
