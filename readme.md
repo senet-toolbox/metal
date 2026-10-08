@@ -35,9 +35,18 @@ cd my-app
 metal vapor run --open
 ```
 
-`create` writes the project, then fetches the current vapor release into it
-with `zig fetch --save`, so the app is pinned to a real commit rather than a
-version string that goes stale.
+`create` writes the project, then fetches vapor into it with
+`zig fetch --save`, pinned to the vapor version this metal release's templates
+are written against (`vapor_ref` in `src/main.zig`). The JS runtime comes from
+that same vapor dependency — the app's build installs it next to the wasm as
+`zig-out/bin/bundle.min.js` — so the two can never come from different
+versions.
+
+Developing vapor itself? Point a new app at your checkout instead:
+
+```bash
+metal vapor create my-app --vapor-path ../vapor
+```
 
 ## Commands
 
@@ -180,7 +189,8 @@ git tag v<version> && git push --tags origin main
 ```
 
 The version string lives in `build.zig.zon` and in `src/metal_ui.zig`; update
-both.
+both. Before releasing, tag vapor and set `vapor_ref` in `src/main.zig` to that
+tag — `"main"` is a development placeholder.
 
 ## License
 

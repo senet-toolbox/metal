@@ -141,21 +141,18 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     // ---------------------
-    //  Run step
+    //  JS runtime
     // ---------------------
-    const run_cmd = b.addRunArtifact(exe);
-    run_cmd.step.dependOn(b.getInstallStep());
+    // Ships with vapor, so it always matches the wasm built above. Installed
+    // next to it as zig-out/bin/bundle.min.js.
+    const install_runtime = b.addInstallBinFile(vapor_dep.namedLazyPath("runtime"), "bundle.min.js");
+    b.getInstallStep().dependOn(&install_runtime.step);
 
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
-
-    // Optional: wire up the HTML generator before compilation
+    // Optional: wire up the HTML generator before compilation. It copies the
+    // runtime into release/, so the runtime has to be installed first.
     if (generate) {
         const gen_step = generateHtml(b, static, atomic);
+        gen_step.dependOn(&install_runtime.step);
         exe.step.dependOn(gen_step);
     }
 }

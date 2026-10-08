@@ -415,8 +415,7 @@ const templates = [_]TemplateFile{
     .{ .path = "assets/icon.svg", .content = @embedFile("templates/assets/icon.svg") },
     .{ .path = "src/config.zig", .content = @embedFile("templates/src/config.zig") },
     .{ .path = "template.html", .content = @embedFile("templates/template.html") },
-    .{ .path = "static/bundle.min.js", .content = @embedFile("templates/static/bundle.min.js") },
-    .{ .path = "release/bundle.min.js", .content = @embedFile("templates/release/bundle.min.js") },
+    .{ .path = ".gitignore", .content = @embedFile("templates/gitignore") },
     .{ .path = "src/routes/Page.zig", .content = @embedFile("templates/src/routes/Page.zig") },
     .{ .path = "src/generator.zig", .content = @embedFile("templates/src/generator.zig") },
 };
@@ -568,8 +567,21 @@ test "renderTemplate copies every other template verbatim" {
     }
 }
 
-fn runCreateCommand(dir_name: []const u8) !u8 {
+fn runCreateCommand(dir_name: []const u8, vapor_path: ?[]const u8) !u8 {
     const cwd = std.Io.Dir.cwd();
+
+    // Resolve --vapor-path before writing anything, so a typo leaves no
+    // half-made project behind.
+    const vapor_abs: ?[:0]u8 = if (vapor_path) |vp| blk: {
+        const zon = try std.fs.path.join(allocator, &.{ vp, "build.zig.zon" });
+        defer allocator.free(zon);
+        cwd.access(main_init.io, zon, .{}) catch {
+            MetalUI.printError("Not a vapor checkout (no build.zig.zon)", vp);
+            return ExitCode.usage;
+        };
+        break :blk try cwd.realPathFileAlloc(main_init.io, vp, allocator);
+    } else null;
+    defer if (vapor_abs) |p| allocator.free(p);
 
     // Probe first. `createDirPath` is mkdir -p: it succeeds on a directory that
     // already exists, so catching PathAlreadyExists from it never fires and
@@ -610,8 +622,18 @@ fn runCreateCommand(dir_name: []const u8) !u8 {
         try file_writer.interface.flush();
     }
 
-    // Pull in the current vapor release rather than shipping a pinned copy.
-    MetalUI.printStep("Fetching", "vapor");
+    if (vapor_abs) |abs| {
+        MetalUI.printStep("Linking", abs);
+        linkLocalVapor(project_dir, dir_name, abs) catch |err| {
+            MetalUI.printError("Could not add the local vapor dependency", @errorName(err));
+            return ExitCode.failure;
+        };
+        MetalUI.printCreateSuccess(dir_name);
+        return ExitCode.ok;
+    }
+
+    // Pull in the vapor release this template is written against.
+    MetalUI.printStep("Fetching", "vapor " ++ vapor_ref);
     zigFetchSave("vapor", packageUrl(.vapor), .{ .path = dir_name }) catch {
         MetalUI.printError("Could not fetch vapor into", dir_name);
         print("\n  {s}The files are on disk, but the project will not build until you{s}\n", .{ Ansi.dim, Ansi.reset });
@@ -625,6 +647,37 @@ fn runCreateCommand(dir_name: []const u8) !u8 {
     MetalUI.printCreateSuccess(dir_name);
     return ExitCode.ok;
 }
+
+/// Points the new project's build.zig.zon at a local vapor checkout, for
+/// developing vapor and an app side by side. Zig requires `.path` to be
+/// relative to the build root.
+fn linkLocalVapor(project_dir: std.Io.Dir, dir_name: []const u8, vapor_abs: []const u8) !void {
+    const io = main_init.io;
+    const project_abs = try std.Io.Dir.cwd().realPathFileAlloc(io, dir_name, allocator);
+    defer allocator.free(project_abs);
+    const rel = try std.fs.path.relative(allocator, project_abs, null, project_abs, vapor_abs);
+    defer allocator.free(rel);
+
+    const zon = try project_dir.readFileAlloc(io, "build.zig.zon", allocator, .limited(64 * 1024));
+    defer allocator.free(zon);
+
+    const empty_deps = ".dependencies = .{},";
+    const at = std.mem.indexOf(u8, zon, empty_deps) orelse return error.TemplateMissing;
+    const updated = try std.fmt.allocPrint(allocator, "{s}.dependencies = .{{\n        .vapor = .{{ .path = \"{s}\" }},\n    }},{s}", .{
+        zon[0..at], rel, zon[at + empty_deps.len ..],
+    });
+    defer allocator.free(updated);
+
+    try project_dir.writeFile(io, .{ .sub_path = "build.zig.zon", .data = updated });
+}
+
+/// The vapor version new projects are pinned to. The scaffold templates are
+/// written against this version's API, so it moves together with them, not on
+/// its own: bump it when metal is released against a new vapor tag.
+///
+/// "main" is the development placeholder; tag a vapor release and set it here
+/// before releasing metal.
+pub const vapor_ref = "main";
 
 const Packages = enum {
     auth,
@@ -655,7 +708,7 @@ fn packageUrl(package_tag: Packages) []const u8 {
     return switch (package_tag) {
         .auth => "git+https://github.com/tether-labs/auth",
         .vaporize => "git+https://github.com/tether-labs/vaporize",
-        .vapor => "git+https://github.com/senet-toolbox/vapor",
+        .vapor => "git+https://github.com/senet-toolbox/vapor#" ++ vapor_ref,
     };
 }
 
@@ -1392,9 +1445,15 @@ fn handleRequest(ctx: *Reverb.Context) !void {
         if (release_mode) path = "/zig-out/release/vapor.wasm";
     }
 
+    // The JS runtime ships with vapor; the app's build installs the copy that
+    // matches the wasm next to it.
     if (std.mem.eql(u8, path, "/bundle.min.js")) {
-        path = if (release_mode) "/release/bundle.min.js" else "/static/bundle.min.js";
+        path = "/zig-out/bin/bundle.min.js";
     }
+
+    // Remembered so the release-mode fallback below can retry without the
+    // compression suffix, rather than the unrewritten request path.
+    const uncompressed_path = path;
 
     if (release_mode) {
         const encoding = ctx.http_header.accept_encoding;
@@ -1419,11 +1478,15 @@ fn handleRequest(ctx: *Reverb.Context) !void {
         std.debug.print("Opening file: {any} {s}\n", .{ err, file_cwd });
         if (release_mode and ctx.http_header.content_encoding.len > 0) {
             ctx.http_header.content_encoding = "";
-            // `request_path`, not `ctx.http_header.path` — the raw target still
-            // carries the query string, and only the stripped form was checked
-            // by isSafeRequestPath.
-            const original = try std.fmt.allocPrint(ra, ".{s}", .{request_path});
+            // Derived from `request_path`, not `ctx.http_header.path` — the raw
+            // target still carries the query string, and only the stripped
+            // form was checked by isSafeRequestPath.
+            const original = try std.fmt.allocPrint(ra, ".{s}", .{uncompressed_path});
             break :blk cwd.openFile(main_init.io, original, .{}) catch {
+                if (isStaticFile(request_path)) {
+                    try ctx.ERROR(404, "Not found");
+                    return;
+                }
                 // Fallback: in release mode serve the root index, in dev serve template
                 const fallback = if (generate or static_mode) "./release/index.html" else "./template.html";
                 break :blk cwd.openFile(main_init.io, fallback, .{}) catch |fallback_err| {
@@ -1432,6 +1495,12 @@ fn handleRequest(ctx: *Reverb.Context) !void {
                     return;
                 };
             };
+        }
+        // A missing asset is a 404. Only routes fall back to the app shell,
+        // where the client-side router takes over.
+        if (isStaticFile(request_path)) {
+            try ctx.ERROR(404, "Not found");
+            return;
         }
         const fallback = if (generate or static_mode) "./release/index.html" else "./template.html";
         break :blk cwd.openFile(main_init.io, fallback, .{}) catch |fallback_err| {
@@ -1696,7 +1765,22 @@ fn run() !u8 {
                 return ExitCode.failure;
             };
             clearScreen();
-            return runCreateCommand(args[3]);
+            var vapor_path: ?[]const u8 = null;
+            var i: usize = 4;
+            while (i < args.len) : (i += 1) {
+                if (std.mem.eql(u8, args[i], "--vapor-path")) {
+                    i += 1;
+                    if (i >= args.len) {
+                        MetalUI.printError("Missing value", "usage: metal vapor create <name> --vapor-path <dir>");
+                        return ExitCode.usage;
+                    }
+                    vapor_path = args[i];
+                } else {
+                    MetalUI.printError("Unknown option", args[i]);
+                    return ExitCode.usage;
+                }
+            }
+            return runCreateCommand(args[3], vapor_path);
         },
 
         .add => {
