@@ -1,4 +1,6 @@
 const std = @import("std");
+const version = @import("build_options").version;
+const vapor_ref = @import("main.zig").vapor_ref;
 
 // REVERB
 // const reverb_logo = [_][]const u8{
@@ -168,9 +170,10 @@ pub fn printHelp() void {
     }
 
     // Version and tagline
-    std.debug.print("\n  {s}{s}v1.1.9{s} {s}─{s} {s}The Zig Web Framework Toolbox{s}\n", .{
+    std.debug.print("\n  {s}{s}v{s}{s} {s}─{s} {s}The Zig Web Framework Toolbox{s}\n", .{
         Ansi.bold,
         Ansi.bright_cyan,
+        version,
         Ansi.reset,
         Ansi.dim,
         Ansi.reset,
@@ -816,10 +819,11 @@ pub fn printVersion() void {
         std.debug.print("  {s}{s}{s}{s}\n", .{ gradient[i], Ansi.bold, line, Ansi.reset });
     }
 
-    std.debug.print("\n  {s}metal{s} {s}v1.1.9{s}\n", .{
+    std.debug.print("\n  {s}metal{s} {s}v{s}{s}\n", .{
         Ansi.bright_white,
         Ansi.reset,
         Ansi.bright_cyan,
+        version,
         Ansi.reset,
     });
     std.debug.print("  {s}The Zig Web Framework Toolbox{s}\n\n", .{
@@ -828,33 +832,20 @@ pub fn printVersion() void {
     });
 
     std.debug.print("  {s}Frameworks:{s}\n", .{ Ansi.bright_white, Ansi.reset });
-    std.debug.print("    {s}•{s} Vapor   {s}v1.2.0{s}  {s}Frontend UI{s}\n", .{
+    std.debug.print("    {s}•{s} Vapor   {s}{s}{s}  {s}Frontend UI (new apps pin this){s}\n", .{
         Ansi.bright_cyan,
         Ansi.reset,
         Ansi.bright_green,
+        vapor_ref,
         Ansi.reset,
         Ansi.dim,
         Ansi.reset,
     });
-    std.debug.print("    {s}•{s} Reverb  {s}v1.1.0{s}  {s}Backend HTTP{s}\n", .{
-        Ansi.bright_cyan,
-        Ansi.reset,
-        Ansi.bright_green,
-        Ansi.reset,
-        Ansi.dim,
-        Ansi.reset,
-    });
-    std.debug.print("    {s}•{s} Canopy  {s}v0.9.0{s}  {s}Full-stack{s}\n\n", .{
-        Ansi.bright_cyan,
-        Ansi.reset,
-        Ansi.bright_yellow,
-        Ansi.reset,
-        Ansi.dim,
-        Ansi.reset,
-    });
+    std.debug.print("    {s}•{s} Reverb  {s}Backend HTTP{s}\n", .{ Ansi.bright_cyan, Ansi.reset, Ansi.dim, Ansi.reset });
+    std.debug.print("    {s}•{s} Canopy  {s}Full-stack{s}\n\n", .{ Ansi.bright_cyan, Ansi.reset, Ansi.dim, Ansi.reset });
 
     std.debug.print("  {s}Requirements:{s}\n", .{ Ansi.bright_white, Ansi.reset });
-    std.debug.print("    {s}•{s} Zig {s}≥ 0.14.0{s}\n\n", .{
+    std.debug.print("    {s}•{s} Zig {s}0.16.0{s}\n\n", .{
         Ansi.bright_cyan,
         Ansi.reset,
         Ansi.bright_green,

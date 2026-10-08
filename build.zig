@@ -22,6 +22,11 @@ pub fn build(b: *std.Build) void {
 
     const reverb_mod = reverb.module("reverb");
 
+    // The version lives in build.zig.zon alone; metal_ui prints this copy.
+    const options = b.addOptions();
+    options.addOption([]const u8, "version", @import("build.zig.zon").version);
+    const options_mod = options.createModule();
+
     // We will also create a module for our other entry point, 'main.zig'.
     const exe_mod = b.createModule(.{
         // `root_source_file` is the Zig "entry point" of the module. If a module
@@ -33,6 +38,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "reverb", .module = reverb_mod },
+            .{ .name = "build_options", .module = options_mod },
         },
         .link_libc = true,
     });
@@ -87,6 +93,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .imports = &.{
             .{ .name = "reverb", .module = reverb_mod },
+            .{ .name = "build_options", .module = options_mod },
         },
         .link_libc = true,
     });
@@ -105,7 +112,7 @@ pub fn build(b: *std.Build) void {
 
     // Type-check everything, including code nothing calls. Wired into both the
     // default build and `test` so it cannot be forgotten.
-    const check_step = addCheckStep(b, reverb_mod, optimize);
+    const check_step = addCheckStep(b, reverb_mod, options_mod, optimize);
     b.getInstallStep().dependOn(check_step);
     test_step.dependOn(check_step);
 }
@@ -121,6 +128,7 @@ pub fn build(b: *std.Build) void {
 fn addCheckStep(
     b: *std.Build,
     reverb_mod: *std.Build.Module,
+    options_mod: *std.Build.Module,
     optimize: std.builtin.OptimizeMode,
 ) *std.Build.Step {
     const check_step = b.step("check", "Type-check every source file, including unreferenced code");
@@ -161,6 +169,7 @@ fn addCheckStep(
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "reverb", .module = reverb_mod },
+                .{ .name = "build_options", .module = options_mod },
             },
             .link_libc = true,
         });

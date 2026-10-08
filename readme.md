@@ -188,8 +188,8 @@ git tag v<version> && git push --tags origin main
 # upload the tarball to the GitHub release assets
 ```
 
-The version string lives in `build.zig.zon` and in `src/metal_ui.zig`; update
-both. Before releasing, tag vapor and set `vapor_ref` in `src/main.zig` to that
+The version lives only in `build.zig.zon`; `build.zig` passes it to the
+binary. Before releasing, tag vapor and set `vapor_ref` in `src/main.zig` to that
 tag — `"main"` is a development placeholder.
 
 ## License
