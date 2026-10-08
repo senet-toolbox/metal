@@ -15,6 +15,10 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    // Release binaries strip debug info: it is 75% of a Linux binary and
+    // macOS already keeps it out of the executable.
+    const strip = b.option(bool, "strip", "Strip debug info from the binary") orelse false;
+
     const reverb = b.dependency("reverb", .{
         .target = target,
         .optimize = optimize,
@@ -41,6 +45,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "build_options", .module = options_mod },
         },
         .link_libc = true,
+        .strip = strip,
     });
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable

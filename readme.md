@@ -22,10 +22,20 @@ needed only for `metal vapor release`.
 ## Install
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh | sh
 ```
 
-`metal upgrade` re-runs that script.
+macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64). The script
+picks the build for your machine, verifies its SHA-256 against the release's
+`checksums.txt`, and installs to `~/.local/bin` — no sudo. If `metal` is
+already on your PATH somewhere writable, it upgrades that copy in place.
+
+| variable | effect |
+| --- | --- |
+| `METAL_VERSION=1.2.0` | install a specific release |
+| `METAL_INSTALL_DIR=/usr/local/bin` | install elsewhere (run with sudo if it needs root) |
+
+`metal upgrade` re-runs the script.
 
 ## Quick start
 
@@ -72,8 +82,9 @@ Both are also valid without a framework: `metal doctor`, `metal clean`,
 
 Packages `add` knows: `vapor`, `vaporize`, `auth`.
 
-Gen types: `page`, `component`, `card`, `button`, `template`, `fetch`,
-`tutorial`, `crud`, `crudfull`, `database`. Output goes to a directory chosen
+Gen types for vapor: `page`, `component`, `card`, `button`, `fetch` — each
+file's header comment shows how to use it, and CI compiles all of them against
+vapor. For reverb: `crud`, `crudfull`, `database`. Output goes to a directory chosen
 per type (`page` → `src/routes/`, components → `src/components/`) unless
 `--output` says otherwise.
 
@@ -179,18 +190,20 @@ metal vapor create fresh && cd fresh && zig build && zig build -Dgenerate=true
 
 ## Releasing
 
-```bash
-zig build -Doptimize=ReleaseFast -Dtarget=aarch64-macos.13.0.0 install
-# stage zig-out/bin/metal into metal-<version>-darwin-arm64/
-tar -czf metal-<version>-darwin-arm64.tar.gz metal-<version>-darwin-arm64/
-# update install.sh, commit, then:
-git tag v<version> && git push --tags origin main
-# upload the tarball to the GitHub release assets
-```
+1. Tag a vapor release and set `vapor_ref` in `src/main.zig` to that tag.
+   `"main"` is a development placeholder, and the release workflow refuses it.
+2. Bump `.version` in `build.zig.zon` — the only place the version lives;
+   `build.zig` passes it to the binary.
+3. Commit, then `git tag v<version> && git push origin main --tags`.
 
-The version lives only in `build.zig.zon`; `build.zig` passes it to the
-binary. Before releasing, tag vapor and set `vapor_ref` in `src/main.zig` to that
-tag — `"main"` is a development placeholder.
+`.github/workflows/release.yml` takes it from there: it checks the tag matches
+`build.zig.zon`, runs the tests, cross-compiles all four targets from macOS
+(stripped, ReleaseSafe), and publishes `metal-<version>-<os>-<arch>.tar.gz`
+plus `checksums.txt` as a GitHub release, which is what `install.sh` downloads.
+
+To try the installer against local builds, serve a directory of those
+archives and run it with `METAL_DOWNLOAD_BASE=http://127.0.0.1:8000
+METAL_VERSION=<version>`.
 
 ## License
 

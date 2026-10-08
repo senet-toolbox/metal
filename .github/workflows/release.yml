@@ -1,0 +1,83 @@
+name: Release
+
+# Push a tag `v<version>` matching build.zig.zon to publish binaries for every
+# supported platform, with checksums, as a GitHub release of this repository.
+# install.sh downloads from these releases.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  REVERB_REF: 57375b7e90e023d0eb32c1fdd9c62050aa0c876c
+
+jobs:
+  release:
+    # macOS, because cross-compiling to macOS needs the SDK (build.zig asks
+    # xcrun for it); Linux targets cross-compile from here too.
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: metal-cli
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metal-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: senet-toolbox/reverb
+          ref: ${{ env.REVERB_REF }}
+          token: ${{ secrets.REVERB_TOKEN || github.token }}
+          path: reverb
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Tag matches build.zig.zon
+        run: |
+          zon_version=$(sed -n 's/^ *\.version = "\(.*\)",/\1/p' build.zig.zon)
+          if [ "v$zon_version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match build.zig.zon version $zon_version"
+            exit 1
+          fi
+          echo "VERSION=$zon_version" >> "$GITHUB_ENV"
+
+      # New apps are pinned to vapor_ref; "main" would make them float.
+      - name: vapor_ref is a release
+        run: |
+          ref=$(sed -n 's/^pub const vapor_ref = "\(.*\)";/\1/p' src/main.zig)
+          if [ -z "$ref" ] || [ "$ref" = "main" ]; then
+            echo "::error::set vapor_ref in src/main.zig to a vapor tag before releasing (is: '$ref')"
+            exit 1
+          fi
+
+      - name: Test
+        run: zig build test
+
+      - name: Build and package
+        run: |
+          mkdir -p dist
+          build() { # <zig target> <os-arch name>
+            zig build -Dtarget="$1" -Doptimize=ReleaseSafe -Dstrip=true --prefix "out/$1"
+            name="metal-$VERSION-$2"
+            mkdir -p "stage/$name/bin"
+            cp "out/$1/bin/metal" "stage/$name/bin/metal"
+            cp LICENSE readme.md "stage/$name/"
+            tar -czf "dist/$name.tar.gz" -C stage "$name"
+          }
+          build aarch64-macos      darwin-arm64
+          build x86_64-macos       darwin-x86_64
+          build x86_64-linux-musl  linux-x86_64
+          build aarch64-linux-musl linux-arm64
+          (cd dist && shasum -a 256 *.tar.gz > checksums.txt && cat checksums.txt)
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "metal $GITHUB_REF_NAME" \
+            --generate-notes

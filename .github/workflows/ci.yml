@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# metal depends on reverb by `.path = "../reverb"`, so every job checks both
+# out side by side: $GITHUB_WORKSPACE/metal-cli and $GITHUB_WORKSPACE/reverb.
+#
+# The reverb commit is pinned here so CI tests a known pair. While reverb is
+# private, REVERB_TOKEN must be a token that can read it; once it is public the
+# fallback to github.token is enough.
+env:
+  REVERB_REF: 57375b7e90e023d0eb32c1fdd9c62050aa0c876c
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: metal-cli
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metal-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: senet-toolbox/reverb
+          ref: ${{ env.REVERB_REF }}
+          token: ${{ secrets.REVERB_TOKEN || github.token }}
+          path: reverb
+
+      # Pinned: metal tracks Zig closely and 0.16 removed APIs it uses.
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Formatting
+        if: runner.os == 'Linux'
+        run: zig fmt --check build.zig src
+
+      # `zig build` also runs `check`, which type-checks every declaration,
+      # including code nothing calls.
+      - name: Build
+        run: zig build
+
+      - name: Tests
+        run: zig build test
+
+      - name: Type-check for Linux explicitly
+        run: zig build check -Dcheck-linux=true
+
+      - name: Cross-compile release targets
+        if: runner.os == 'macOS'
+        run: |
+          for t in aarch64-macos x86_64-macos x86_64-linux-musl aarch64-linux-musl; do
+            zig build -Dtarget=$t -Doptimize=ReleaseSafe --prefix "out/$t"
+          done
+
+  # The scaffold, end to end, against vapor's main branch: catches template
+  # drift that unit tests cannot, e.g. a vapor API change the starter app uses.
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: metal-cli
+      - uses: actions/checkout@v4
+        with:
+          repository: senet-toolbox/reverb
+          ref: ${{ env.REVERB_REF }}
+          token: ${{ secrets.REVERB_TOKEN || github.token }}
+          path: reverb
+      - uses: actions/checkout@v4
+        with:
+          repository: senet-toolbox/vapor
+          path: vapor
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Build metal
+        working-directory: metal-cli
+        run: zig build
+
+      - name: Create, build and generate an app
+        run: |
+          mkdir scratch && cd scratch
+          ../metal-cli/zig-out/bin/metal vapor create app --vapor-path ../vapor
+          cd app
+          zig build
+          test -f zig-out/bin/vapor.wasm
+          test -f zig-out/bin/bundle.min.js
+          zig build -Dgenerate=true 2>&1 | tee generate.log
+          test -f release/index.html
+          cmp release/bundle.min.js ../../vapor/js/dist/bundle.min.js
+          # `! grep` would never fail the step: bash -e ignores negated commands.
+          if grep -qi "error" generate.log; then exit 1; fi
+
+      # Every vapor gen template must compile against vapor. Zig only analyses
+      # code something references, so a page calls each generated file.
+      - name: Generated code compiles
+        working-directory: scratch/app
+        run: |
+          metal=../../metal-cli/zig-out/bin/metal
+          $metal vapor gen page About
+          $metal vapor gen component Counter
+          $metal vapor gen card InfoCard
+          $metal vapor gen button PrimaryButton
+          $metal vapor gen fetch UserList
+          cat > src/routes/Showcase.zig <<'ZIG'
+          const Vapor = @import("vapor");
+          const Counter = @import("../components/Counter.zig");
+          const InfoCard = @import("../components/InfoCard.zig");
+          const PrimaryButton = @import("../components/PrimaryButton.zig");
+          const UserList = @import("../components/UserList.zig");
+
+          var counter: Counter = .{};
+
+          fn clicked() void {}
+
+          pub fn init() void {
+              Vapor.Page(.{ .route = "/showcase" }, render, null);
+              UserList.load();
+          }
+
+          fn render() void {
+              counter.render();
+              InfoCard.render("Title", "Body");
+              PrimaryButton.render("Press", clicked, .{});
+              UserList.render();
+          }
+          ZIG
+          sed -i 's|^\(\s*\)Vapor.Page(.{ .route = "/" }, Counter, null);|&\n\1@import("routes/About.zig").init();\n\1@import("routes/Showcase.zig").init();|' src/main.zig
+          grep -q 'routes/Showcase.zig' src/main.zig
+          zig build
