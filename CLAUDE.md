@@ -159,7 +159,10 @@ source) is deleted; the repo is 58 MB now, and a first commit would be 32 files
    `channel.zig` years earlier; metal-cli still has no equivalent, and no Linux
    build check.
 3. **`.reverb = .{ .path = "../reverb" }`** in `build.zig.zon` — metal-cli only
-   builds next to a sibling `reverb` checkout.
+   builds next to a sibling `reverb` checkout. Deliberate for now (dogfooding,
+   reverb still private); switch to a `git+https` pin when reverb goes public.
+   reverb's `Server.new` dropped its tracking-allocator argument on main
+   (2026-10); metal's two call sites are updated.
 4. `src/main.zig` is ~1,660 lines and holds command dispatch; not yet read
    closely.
 5. `zig build -Dgenerate=true` in a scaffolded app prints `Copy error:

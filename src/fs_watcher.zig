@@ -317,7 +317,7 @@ const LinuxImpl = struct {
         // Add the root itself first.
         const root_z = try allocator.dupeZ(u8, root);
         defer allocator.free(root_z);
-        _ = std.posix.inotify_add_watch(fd, root_z, mask) catch return;
+        _ = posix.inotify_add_watch(fd, root_z, mask) catch return;
 
         var dir = std.Io.Dir.cwd().openDir(Main.main_init.io, root, .{ .iterate = true }) catch return;
         defer dir.close(Main.main_init.io);
@@ -325,18 +325,18 @@ const LinuxImpl = struct {
         var walker = try dir.walk(allocator);
         defer walker.deinit();
 
-        while (try walker.next()) |entry| {
+        while (try walker.next(Main.main_init.io)) |entry| {
             if (entry.kind != .directory) continue;
             const sub = try std.fs.path.join(allocator, &.{ root, entry.path });
             defer allocator.free(sub);
             const sub_z = try allocator.dupeZ(u8, sub);
             defer allocator.free(sub_z);
-            _ = std.posix.inotify_add_watch(fd, sub_z, mask) catch {};
+            _ = posix.inotify_add_watch(fd, sub_z, mask) catch {};
         }
     }
 
     pub fn destroy(self: *LinuxImpl, allocator: std.mem.Allocator) void {
-        if (self.fd >= 0) std.posix.close(self.fd);
+        if (self.fd >= 0) posix.close(self.fd);
         allocator.destroy(self);
     }
 

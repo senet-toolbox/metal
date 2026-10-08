@@ -122,15 +122,13 @@ pub fn sleep(nanoseconds: u64) void {
         var rem: linux.timespec = undefined;
 
         while (true) {
-            switch (linux.E.init(linux.clock_nanosleep(.MONOTONIC, .{ .ABSTIME = false }, &req, &rem))) {
-                .SUCCESS => return,
+            switch (linux.errno(linux.clock_nanosleep(.MONOTONIC, .{ .ABSTIME = false }, &req, &rem))) {
                 .INTR => {
                     req = rem;
                     continue;
                 },
-                .FAULT => unreachable,
-                .INVAL => unreachable,
-                .OPNOTSUPP => unreachable,
+                // SUCCESS, or an error a sleep has no way to report: either
+                // way the caller just carries on.
                 else => return,
             }
         }

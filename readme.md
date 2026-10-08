@@ -147,8 +147,19 @@ whole functions are broken. `src/check.zig` references every public
 declaration to force the analysis, and `build.zig` fails the step if a file
 under `src/` is missing from that list.
 
-`-Dcheck-linux=true` adds an x86_64-linux check target. It currently fails
-inside the `loom` dependency, which is kqueue-only.
+`-Dcheck-linux=true` adds an x86_64-linux check target. It passes: loom has
+an epoll backend and the file watcher uses inotify on Linux.
+
+Release binaries cross-compile from one Mac for all four targets:
+
+```bash
+for t in aarch64-macos x86_64-macos x86_64-linux-musl aarch64-linux-musl; do
+  zig build -Dtarget=$t -Doptimize=ReleaseSafe --prefix out/$t
+done
+```
+
+Cross-targeting macOS needs the SDK; `build.zig` asks `xcrun --show-sdk-path`
+for it, so this works from macOS but not from a Linux host.
 
 Verifying the scaffold end to end, from nothing:
 

@@ -371,6 +371,23 @@ pub fn inotify_init1(flags: u32) anyerror!i32 {
     }
 }
 
+/// Watch `pathname` on an inotify instance; returns the watch descriptor.
+pub fn inotify_add_watch(fd: i32, pathname: [*:0]const u8, mask: u32) anyerror!i32 {
+    const rc = system.inotify_add_watch(fd, pathname, mask);
+    switch (errno(rc)) {
+        .SUCCESS => return @intCast(rc),
+        .ACCES => return error.AccessDenied,
+        .BADF, .INVAL => return error.InvalidWatch,
+        .EXIST => return error.WatchAlreadyExists,
+        .NAMETOOLONG => return error.NameTooLong,
+        .NOENT => return error.FileNotFound,
+        .NOMEM => return error.SystemResources,
+        .NOSPC => return error.UserResourceLimitReached,
+        .NOTDIR => return error.NotDir,
+        else => |err| return unexpectedErrno(err),
+    }
+}
+
 const timespec = posix.timespec;
 /// From `std.os.wasi`, not `system`: `std.c` has no `timestamp_t`, and the only
 /// use below is the wasi-without-libc branch of `clock_gettime`.

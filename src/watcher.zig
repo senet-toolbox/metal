@@ -712,7 +712,7 @@ fn createWSS(port: u16, allocator: std.mem.Allocator) !void {
         .port = port,
         .max = 1024,
         .max_body_size = 1024 * 1024 * 10,
-    }, allocator, null);
+    }, allocator);
     try server.useWss(.{
         .onConnection = onConnection,
         .onMessage = onMessage,

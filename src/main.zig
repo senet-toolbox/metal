@@ -1552,7 +1552,7 @@ pub fn initServer(host: []const u8, port: u16, local_allocator: std.mem.Allocato
         .port = port,
         .max = 1024,
         .max_body_size = 1024 * 1024 * 10,
-    }, local_allocator, null) catch |err| {
+    }, local_allocator) catch |err| {
         std.debug.print("Server init failed: {s}\n", .{@errorName(err)});
         return err;
     };

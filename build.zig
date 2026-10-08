@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .macos) {
         exe.root_module.linkFramework("CoreServices", .{});
         exe.root_module.linkFramework("CoreFoundation", .{});
+        addMacSdkPaths(b, exe.root_module, target);
     }
 
     // This declares intent for the executable to be installed into the
@@ -233,4 +234,22 @@ fn verifyCheckRootIsComplete(b: *std.Build, check_step: *std.Build.Step) void {
 
     const fail = b.addFail(message.items);
     check_step.dependOn(&fail.step);
+}
+
+/// Cross-compiling to macOS (e.g. x86_64 from an arm64 Mac, for a release)
+/// does not search the SDK the way a native build does, so CoreServices and
+/// CoreFoundation go missing at link time. Point the linker at the SDK that
+/// `xcrun` reports. Native builds and non-Mac hosts are left alone.
+fn addMacSdkPaths(b: *std.Build, module: *std.Build.Module, target: std.Build.ResolvedTarget) void {
+    if (target.query.isNative()) return;
+    if (b.graph.host.result.os.tag != .macos) return;
+
+    var code: u8 = undefined;
+    const out = b.runAllowFail(&.{ "xcrun", "--show-sdk-path" }, &code, .ignore) catch return;
+    const sdk = std.mem.trim(u8, out, " \r\n\t");
+    if (sdk.len == 0) return;
+
+    module.addFrameworkPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "System/Library/Frameworks" }) });
+    module.addSystemIncludePath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr/include" }) });
+    module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ sdk, "usr/lib" }) });
 }
