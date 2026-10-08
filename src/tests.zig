@@ -8,4 +8,5 @@ test {
     _ = @import("main.zig");
     _ = @import("Time.zig");
     _ = @import("time/epoch.zig");
+    _ = @import("file_contents.zig");
 }

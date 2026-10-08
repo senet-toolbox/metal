@@ -224,19 +224,16 @@ pub fn printHelp() void {
     printSectionHeader("GENERATION TYPES");
 
     std.debug.print("  {s}Frontend Components:{s}\n", .{ Ansi.bright_magenta, Ansi.reset });
-    printGenItem("component", "Basic component with init/deinit/render");
-    printGenItem("page", "Full page with routing setup");
-    printGenItem("card", "Pre-styled card with title and body");
-    printGenItem("button", "Interactive button with callback");
-    printGenItem("template", "Base template with hooks and flexbox");
-    printGenItem("form", "Form component with validation");
+    printGenItem("page", "Page with its own route");
+    printGenItem("component", "Component with its own state");
+    printGenItem("card", "Styled card with title and body");
+    printGenItem("button", "Styled button with a click handler");
+    printGenItem("fetch", "Component that loads data over HTTP");
 
     std.debug.print("\n  {s}Backend Generators:{s}\n", .{ Ansi.bright_magenta, Ansi.reset });
-    printGenItem("handler", "HTTP request handler");
-    printGenItem("middleware", "Request middleware");
-    printGenItem("model", "Database model");
-    printGenItem("crud", "Full CRUD operations");
-    printGenItem("websocket", "WebSocket handler");
+    printGenItem("crud", "CRUD handler skeleton");
+    printGenItem("crudfull", "Full CRUD with database calls");
+    printGenItem("database", "Database client setup");
     std.debug.print("\n", .{});
 
     // Options
@@ -338,12 +335,11 @@ pub fn printFrameworkHelp(framework: []const u8) void {
     printSectionHeader("GENERATION TYPES");
     if (is_vapor or is_canopy) {
         std.debug.print("  {s}Frontend:{s}\n", .{ Ansi.bright_magenta, Ansi.reset });
-        printGenItem("component", "Basic component with init/deinit/render");
-        printGenItem("page", "Full page with routing setup");
-        printGenItem("card", "Pre-styled card");
-        printGenItem("button", "Interactive button with callback");
-        printGenItem("template", "Base template with hooks");
-        printGenItem("fetch", "Component that fetches data");
+        printGenItem("page", "Page with its own route");
+        printGenItem("component", "Component with its own state");
+        printGenItem("card", "Styled card with title and body");
+        printGenItem("button", "Styled button with a click handler");
+        printGenItem("fetch", "Component that loads data over HTTP");
     }
     if (is_reverb or is_canopy) {
         std.debug.print("\n  {s}Backend:{s}\n", .{ Ansi.bright_magenta, Ansi.reset });
@@ -853,7 +849,7 @@ pub fn printVersion() void {
     });
 
     std.debug.print("  {s}License:{s} MIT\n", .{ Ansi.dim, Ansi.reset });
-    std.debug.print("  {s}Website:{s} {s}https://vapor.zig.dev{s}\n\n", .{
+    std.debug.print("  {s}Website:{s} {s}https://senet.run{s}\n\n", .{
         Ansi.dim,
         Ansi.reset,
         Ansi.bright_blue,

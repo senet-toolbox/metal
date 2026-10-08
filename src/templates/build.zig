@@ -42,6 +42,9 @@ fn generateHtml(b: *std.Build, static: bool, atomic: bool) *std.Build.Step {
         .root_source_file = b.path("src/generator.zig"),
         .target = target,
         .optimize = .Debug,
+        // The generator runs natively and vapor's SSR path uses the C
+        // allocator. macOS links libc implicitly; Linux does not.
+        .link_libc = true,
         .imports = &.{
             .{ .name = "vapor", .module = vapor_module },
             .{ .name = "theme", .module = theme_module }, // ADD THIS

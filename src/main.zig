@@ -64,9 +64,7 @@ fn defaultGenDir(gen_type: []const u8) []const u8 {
     if (std.mem.eql(u8, gen_type, "component")) return "src/components";
     if (std.mem.eql(u8, gen_type, "card")) return "src/components";
     if (std.mem.eql(u8, gen_type, "button")) return "src/components";
-    if (std.mem.eql(u8, gen_type, "template")) return "src/components";
     if (std.mem.eql(u8, gen_type, "fetch")) return "src/components";
-    if (std.mem.eql(u8, gen_type, "tutorial")) return "src/components";
     if (std.mem.eql(u8, gen_type, "crud")) return "src/handlers";
     if (std.mem.eql(u8, gen_type, "crudfull")) return "src/handlers";
     if (std.mem.eql(u8, gen_type, "database")) return "src";
@@ -298,7 +296,7 @@ fn runUpgradeCommand() u8 {
     MetalUI.printStep("Upgrade", "fetching latest version...");
 
     var child = std.process.spawn(main_init.io, .{
-        .argv = &.{ "bash", "-c", "curl -sSL https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh | bash" },
+        .argv = &.{ "bash", "-c", "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh | sh" },
         .stdout = .inherit,
         .stderr = .inherit,
     }) catch {
@@ -910,7 +908,7 @@ fn runGenCommand(contents: *const Contents, options: GenOptions) !void {
     if (gen_type_enum == .null) {
         MetalUI.printError("Unknown generation type", options.gen_type);
         print(
-            "  {s}Available:{s} component, page, card, button, template, fetch, crud, crudfull, database\n\n",
+            "  {s}Available:{s} page, component, card, button, fetch (vapor); crud, crudfull, database (reverb)\n\n",
             .{ Ansi.dim, Ansi.reset },
         );
         return error.UnknownGenType;
@@ -1003,6 +1001,8 @@ fn generateDefaultFile(
     var w_buffer: [4096]u8 = undefined;
     var file_writer = file.writer(main_init.io, &w_buffer);
     try file_writer.interface.writeAll(content);
+    // Without this the buffered bytes are dropped on close and the file is empty.
+    try file_writer.interface.flush();
 
     if (!options.quiet) {
         MetalUI.printSuccess("Generated", output_path);
@@ -1268,6 +1268,18 @@ test "dev server defaults to loopback" {
     try std.testing.expectEqualStrings("127.0.0.1", (ReverbConfig{}).host);
 }
 
+/// Whether a request is a page navigation. Browsers send `text/html` in Accept
+/// when navigating; fetch() sends `*/*` unless told otherwise.
+fn acceptsHtml(accept: []const u8) bool {
+    return std.mem.indexOf(u8, accept, "text/html") != null;
+}
+
+test acceptsHtml {
+    try std.testing.expect(acceptsHtml("text/html,application/xhtml+xml,*/*;q=0.8"));
+    try std.testing.expect(!acceptsHtml("*/*"));
+    try std.testing.expect(!acceptsHtml(""));
+}
+
 fn isStaticFile(path: []const u8) bool {
     const extension = std.fs.path.extension(path);
     inline for (staticExtensions) |ext| {
@@ -1435,6 +1447,12 @@ fn handleRequest(ctx: *Reverb.Context) !void {
             path = "/template.html";
         } else if (isStaticFile(path)) {
             // serve as-is (e.g. /static/style.css from CWD)
+        } else if (!acceptsHtml(ctx.http_header.accept)) {
+            // A fetch() to a path the dev server does not have, e.g. an API
+            // that is not running. Answering with the app shell would hand the
+            // caller a 200 and a page of HTML instead of an error.
+            try ctx.ERROR(404, "Not found");
+            return;
         } else {
             path = "/template.html";
         }

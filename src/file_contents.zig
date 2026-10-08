@@ -1,3 +1,13 @@
+//! Source templates for `metal <framework> gen <type> <Name>`.
+//!
+//! The vapor templates are written against vapor's current API and are
+//! compiled in CI (see the `scaffold` job), so a vapor API change that breaks
+//! them fails there instead of in a user's first `gen`.
+//!
+//! Placeholders, replaced by `render`:
+//!   __NAME__   the type/file name as given, first letter capitalised (`UserCard`)
+//!   __ROUTE__  kebab-case route for pages (`/user-card`)
+
 const std = @import("std");
 
 pub const CommandType = enum {
@@ -6,337 +16,205 @@ pub const CommandType = enum {
 };
 
 pub const GenType = enum {
+    // vapor
+    page,
+    component,
+    card,
+    button,
+    fetch,
+    // reverb (backend)
     crud,
     crudfull,
     database,
-    client,
-    card,
-    component,
-    tutorial,
-    complex,
-    button,
-    template,
-    fetch,
-    page,
     null,
 };
 
 pub const Contents = @This();
 allocator: *std.mem.Allocator,
 
-fn tutorial(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\
-        \\// Styles.
-        \\const Styles = Fabric.Styles;
-        \\
-        \\// Reactive Signals for updating state.
-        \\const Signal = Fabric.Signal;
-        \\
-        \\// Style
-        \\const Style = Fabric.Style;
-        \\
-        \\// Static components never rerender.
-        \\const Static = Fabric.Static;
-        \\
-        \\// Animation Components.
-        \\const Animation = Fabric.Animation;
-        \\
-        \\// Pure components only rerender when props change.
-        \\const Pure = Fabric.Pure;
-        \\
-        \\// Dynamic components depend on signals and props.
-        \\const Dynamic = Fabric.Dynamic;
-        \\
-        \\// Colors/Themes/Styling
-        \\var styles: Styles = undefined;
-        \\var primary: [4]f32 = undefined;
-        \\var secondary: [4]f32 = undefined;
-        \\var border_color: [4]f32 = undefined;
-        \\var text_color: [4]f32 = undefined;
-        \\var text_tint_color: [4]f32 = undefined;
-        \\var tint: [4]f32 = undefined;
-        \\
-        \\// Component Instance
-        \\const {s} = @This();
-        \\
-        \\// Initialization
-        \\pub fn init(self: *{s}) void {{
-        \\    primary = ...;
-        \\    secondary = ...;
-        \\    border_color = ...;
-        \\    text_color = ...;
-        \\    text_tint_color = ...;
-        \\    tint = ...;
-        \\
-        \\    self.* = {s}{{}};
-        \\}}
-        \\
-        \\// Deinitialization
-        \\pub fn deinit(self: *{s}) void {{}}
-        \\
-        \\// Render
-        \\pub fn render(self: *{s}) void {{}}
-    ;
+const page_template =
+    \\//! __NAME__ page, served at __ROUTE__.
+    \\//!
+    \\//! Register it once, in src/main.zig's init():
+    \\//!
+    \\//!     @import("routes/__NAME__.zig").init();
+    \\
+    \\const Vapor = @import("vapor");
+    \\const Box = Vapor.Box;
+    \\const Heading = Vapor.Heading;
+    \\const Text = Vapor.Text;
+    \\
+    \\pub fn init() void {
+    \\    Vapor.Page(.{ .route = "__ROUTE__" }, render, null);
+    \\}
+    \\
+    \\fn render() void {
+    \\    Box().direction(.column).padding(.all(24)).spacing(12).children({
+    \\        Heading(1, "__NAME__").end();
+    \\        Text("Edit src/routes/__NAME__.zig to change this page.").end();
+    \\    });
+    \\}
+    \\
+;
 
-    return try std.fmt.allocPrint(self.allocator.*, content, .{ file_name, file_name, file_name, file_name, file_name });
+const component_template =
+    \\//! __NAME__: a component with its own state. Every instance keeps a
+    \\//! separate count.
+    \\//!
+    \\//!     const __NAME__ = @import("components/__NAME__.zig");
+    \\//!     var counter: __NAME__ = .{};
+    \\//!
+    \\//!     fn render() void {
+    \\//!         counter.render();
+    \\//!     }
+    \\
+    \\const Vapor = @import("vapor");
+    \\const Row = Vapor.Row;
+    \\const Button = Vapor.Button;
+    \\const Text = Vapor.Text;
+    \\
+    \\const __NAME__ = @This();
+    \\
+    \\count: i32 = 0,
+    \\
+    \\pub fn render(self: *__NAME__) void {
+    \\    Row().spacing(8).children({
+    \\        Button(decrement, .{self}).children({
+    \\            Text("-").end();
+    \\        });
+    \\        Text(self.count).end();
+    \\        Button(increment, .{self}).children({
+    \\            Text("+").end();
+    \\        });
+    \\    });
+    \\}
+    \\
+    \\fn increment(self: *__NAME__) void {
+    \\    self.count += 1;
+    \\}
+    \\
+    \\fn decrement(self: *__NAME__) void {
+    \\    self.count -= 1;
+    \\}
+    \\
+;
+
+const card_template =
+    \\//! __NAME__: a presentational card, a pure function of its arguments.
+    \\//!
+    \\//!     @import("components/__NAME__.zig").render("Title", "Body text");
+    \\
+    \\const Vapor = @import("vapor");
+    \\const Box = Vapor.Box;
+    \\const Heading = Vapor.Heading;
+    \\const Text = Vapor.Text;
+    \\
+    \\pub fn render(title: []const u8, body: []const u8) void {
+    \\    Box()
+    \\        .direction(.column)
+    \\        .padding(.all(16))
+    \\        .spacing(8)
+    \\        .border(.solid(.all(1), .hex("#E1E1E1"), .all(8)))
+    \\        .children({
+    \\        Heading(3, title).end();
+    \\        Text(body).end();
+    \\    });
+    \\}
+    \\
+;
+
+const button_template =
+    \\//! __NAME__: a styled button. Takes a click handler and its arguments, the
+    \\//! same way Vapor.Button does.
+    \\//!
+    \\//!     const __NAME__ = @import("components/__NAME__.zig");
+    \\//!     __NAME__.render("Save", save, .{});
+    \\
+    \\const Vapor = @import("vapor");
+    \\const Button = Vapor.Button;
+    \\const Text = Vapor.Text;
+    \\
+    \\pub fn render(label: []const u8, on_click: anytype, args: anytype) void {
+    \\    Button(on_click, args)
+    \\        .padding(.all(12))
+    \\        .border(.solid(.all(1), .palette(.tint), .all(6)))
+    \\        .cursor(.pointer)
+    \\        .hover(.{ .background = .palette(.tint), .text_color = .white })
+    \\        .children({
+    \\        Text(label).end();
+    \\    });
+    \\}
+    \\
+;
+
+const fetch_template =
+    \\//! __NAME__: loads data over HTTP and renders each state of the request.
+    \\//!
+    \\//!     const __NAME__ = @import("components/__NAME__.zig");
+    \\//!     __NAME__.load();    // once, e.g. from your page's init()
+    \\//!     __NAME__.render();  // from a render function
+    \\
+    \\const std = @import("std");
+    \\const Vapor = @import("vapor");
+    \\const Fetch = Vapor.Fetch.Fetch;
+    \\const Text = Vapor.Text;
+    \\
+    \\/// Point this at your API.
+    \\const url = "/api__ROUTE__";
+    \\
+    \\var request: ?*Fetch = null;
+    \\var body: []const u8 = "";
+    \\
+    \\pub fn load() void {
+    \\    const req = Fetch.fetch(url, .{ .method = .GET });
+    \\    req.handle(onResponse, .{});
+    \\    request = req;
+    \\}
+    \\
+    \\fn onResponse(result: Vapor.Fetch.Result) void {
+    \\    switch (result) {
+    \\        .ok => |response| body = response.body,
+    \\        .err => |err| std.log.err("__NAME__: {s} failed: {s}", .{ url, err.message }),
+    \\    }
+    \\}
+    \\
+    \\pub fn render() void {
+    \\    const req = request orelse return;
+    \\    switch (req.state()) {
+    \\        .idle, .loading => Text("Loading...").end(),
+    \\        .ok => Text(body).end(),
+    \\        .err => Text("Could not load data.").end(),
+    \\    }
+    \\}
+    \\
+;
+
+/// `UserCard` -> `/user-card`. Runs of capitals stay together (`HTTPLog` ->
+/// `/httplog`), and anything that is not a letter or digit becomes `-`.
+fn routeFromName(gpa: std.mem.Allocator, name: []const u8) ![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(gpa);
+    try out.append(gpa, '/');
+    for (name, 0..) |c, i| {
+        if (std.ascii.isUpper(c)) {
+            const prev_lower = i > 0 and (std.ascii.isLower(name[i - 1]) or std.ascii.isDigit(name[i - 1]));
+            if (prev_lower and out.items[out.items.len - 1] != '-') try out.append(gpa, '-');
+            try out.append(gpa, std.ascii.toLower(c));
+        } else if (std.ascii.isAlphanumeric(c)) {
+            try out.append(gpa, c);
+        } else if (out.items[out.items.len - 1] != '-' and out.items[out.items.len - 1] != '/') {
+            try out.append(gpa, '-');
+        }
+    }
+    return out.toOwnedSlice(gpa);
 }
 
-/// Minimal card component: bordered box, title + body.
-/// Usage: try writer.writeAll(try contents.card("CardComponent"));
-fn card(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\const Static = Fabric.Static;
-        \\const Style = Fabric.Style;
-        \\const Pure = Fabric.Pure;
-        \\
-        \\// Component instance
-        \\const {s} = @This();
-        \\
-        \\pub fn init() void {{}}
-        \\
-        \\pub fn deinit() void {{}}
-        \\
-        \\pub fn render() void {{
-        \\    Static.FlexBox(.{{
-        \\        .direction = .column,
-        \\        .gap = 8,
-        \\        .padding = .all(16),
-        \\        .border_thickness = .all(1),
-        \\        .border_radius = .all(8),
-        \\        .width = .fixed(260),
-        \\    }})({{
-        \\        Static.Text("Card Title", .{{
-        \\            .font_size   = 18,
-        \\            .font_weight = 700,
-        \\        }});
-        \\
-        \\        Static.Text("Card body content goes here — replace me.", .{{
-        \\            .font_size = 14,
-        \\        }});
-        \\    }});
-        \\}}
-    ;
-    return try std.fmt.allocPrint(self.allocator.*, content, .{file_name});
-}
-
-fn alterBuildZon(self: *const Contents, dir_name: []const u8) ![]const u8 {
-    const content =
-        \\.{
-        \\    .name = .{s},
-        \\    .version = "0.0.0",
-        \\    .fingerprint = 0xf8deace55d76bf2c, // Changing this has security and trust implications.
-        \\    .minimum_zig_version = "0.14.0",
-        \\    .dependencies = .{
-        \\        .fabric = .{
-        \\            .url = "zig fetch https://github.com/vic-Rokx/fabric/archive/refs/tags/v1.1.0.tar.gz",
-        \\            .hash = "{s}",
-        \\        },
-        \\    },
-        \\    .paths = .{
-        \\        "build.zig",
-        \\        "build.zig.zon",
-        \\        "src",
-        \\        // For example...
-        \\        //"LICENSE",
-        \\        //"README.md",
-        \\    },
-        \\}
-    ;
-
-    return try std.fmt.allocPrint(self.allocator.*, content, .{ dir_name, dir_name });
-}
-
-fn page(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\const Signal = Fabric.Signal;
-        \\const Style = Fabric.Style;
-        \\const Static = Fabric.Static;
-        \\const Pure = Fabric.Pure;
-        \\const Page = Fabric.Page;
-        \\
-        \\// Component Instance
-        \\const {s} = @This();
-        \\
-        \\// Initialization
-        \\pub fn init() void {{
-        \\    Page(@src(), render, null, .{{}});
-        \\}}
-        \\
-        \\// Deinitialization
-        \\pub fn deinit() void {{}}
-        \\
-        \\// Render
-        \\pub fn render() void {{}}
-    ;
-    return try std.fmt.allocPrint(self.allocator.*, content, .{file_name});
-}
-
-fn fetch(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\const Kit = Fabric.Kit;
-        \\const Signal = Fabric.Signal;
-        \\const Style = Fabric.Style;
-        \\const Static = Fabric.Static;
-        \\const BtnProps = Fabric.BtnProps;
-        \\const Pure = Fabric.Pure;
-        \\const Page = Fabric.Page;
-        \\
-        \\// Component Instance
-        \\const {s} = @This();
-        \\
-        \\// Initialization
-        \\pub fn init() void {{
-        \\  Fabric.Kit.fetch("/api/...", callback, .{{ .method = "GET" }});
-        \\}}
-        \\
-        \\// Deinitialization
-        \\pub fn deinit() void {{}}
-        \\
-        \\// Callback 
-        \\pub fn callback(resp: Kit.Response) void {{
-        \\  Fabric.println("We fetched some stuff! {{any}}", .{{resp.code}});
-        \\}}
-        \\
-        \\// Render
-        \\pub fn render() void {{
-        \\  Static.Button(
-        \\      BtnProps{{
-        \\         .onPress = callback,
-        \\      }},
-        \\      Style.apply(.{{
-        \\          .padding = .all(8),
-        \\          .border_thickness = .all(1),
-        \\          .width = .fixed(120),
-        \\          .height = .fixed(40),
-        \\      }}),
-        \\  )({{
-        \\      Static.Text("Press!", .{{
-        \\          .font_size = 16,
-        \\      }});
-        \\  }});
-        \\}}
-    ;
-    return try std.fmt.allocPrint(self.allocator.*, content, .{file_name});
-}
-
-fn button(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\const Signal = Fabric.Signal;
-        \\const Style = Fabric.Style;
-        \\const Static = Fabric.Static;
-        \\const BtnProps = Fabric.BtnProps;
-        \\const Pure = Fabric.Pure;
-        \\const Page = Fabric.Page;
-        \\
-        \\// Component Instance
-        \\const {s} = @This();
-        \\
-        \\// Initialization
-        \\pub fn init() void {{}}
-        \\
-        \\// Deinitialization
-        \\pub fn deinit() void {{}}
-        \\
-        \\// Callback 
-        \\pub fn callback() void {{
-        \\  Fabric.println("Clicked!", .{{}});
-        \\}}
-        \\
-        \\// Render
-        \\pub fn render() void {{
-        \\  Static.Button(
-        \\      BtnProps{{
-        \\         .onPress = callback,
-        \\      }},
-        \\      Style.apply(.{{
-        \\          .padding = .all(8),
-        \\          .border_thickness = .all(1),
-        \\          .width = .fixed(120),
-        \\          .height = .fixed(40),
-        \\      }}),
-        \\  )({{
-        \\      Static.Text("Press!", .{{
-        \\          .font_size = 16,
-        \\      }});
-        \\  }});
-        \\}}
-    ;
-    return try std.fmt.allocPrint(self.allocator.*, content, .{file_name});
-}
-
-fn template(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\const Signal = Fabric.Signal;
-        \\const Style = Fabric.Style;
-        \\const Static = Fabric.Static;
-        \\const Pure = Fabric.Pure;
-        \\const Page = Fabric.Page;
-        \\
-        \\// Component Instance
-        \\const {s} = @This();
-        \\
-        \\// Initialization
-        \\pub fn init() void {{}}
-        \\
-        \\// Deinitialization
-        \\pub fn deinit() void {{}}
-        \\
-        \\// Mounted 
-        \\pub fn mount() void {{}}
-        \\
-        \\// Render
-        \\pub fn render() void {{
-        \\  Static.Hooks(.{{ .mounted = mount }}, .{{}})({{
-        \\      Static.FlexBox(.{{
-        \\          .height = .percent(100),
-        \\          .width = .percent(100),
-        \\          .direction = .column,
-        \\          .child_gap = 16,
-        \\      }})({{
-        \\          Static.Text("...text...", .{{}});
-        \\      }});
-        \\  }});
-        \\}}
-    ;
-    return try std.fmt.allocPrint(self.allocator.*, content, .{file_name});
-}
-
-fn component(self: *const Contents, file_name: []const u8) ![]const u8 {
-    const content =
-        \\const std = @import("std");
-        \\const Fabric = @import("fabric");
-        \\const Signal = Fabric.Signal;
-        \\const Style = Fabric.Style;
-        \\const Static = Fabric.Static;
-        \\const Pure = Fabric.Pure;
-        \\const Page = Fabric.Page;
-        \\
-        \\// Component Instance
-        \\const {s} = @This();
-        \\
-        \\// Initialization
-        \\pub fn init() void {{}}
-        \\
-        \\// Deinitialization
-        \\pub fn deinit() void {{}}
-        \\
-        \\// Render
-        \\pub fn render() void {{}}
-    ;
-    return try std.fmt.allocPrint(self.allocator.*, content, .{file_name});
+fn render(gpa: std.mem.Allocator, template: []const u8, name: []const u8) ![]u8 {
+    const route = try routeFromName(gpa, name);
+    defer gpa.free(route);
+    const with_name = try std.mem.replaceOwned(u8, gpa, template, "__NAME__", name);
+    defer gpa.free(with_name);
+    return std.mem.replaceOwned(u8, gpa, with_name, "__ROUTE__", route);
 }
 
 fn crud(_: *const Contents) []const u8 {
@@ -521,43 +399,43 @@ pub fn getGenType(_: *const Contents, file_name: []const u8) GenType {
 }
 
 pub fn getContent(self: *const Contents, cmd_type: CommandType, gen_type: GenType, file_name: []const u8) ![]const u8 {
-    switch (cmd_type) {
-        .Gen => {
-            switch (gen_type) {
-                .tutorial => {
-                    return try self.tutorial(file_name);
-                },
-                .component => {
-                    return try self.component(file_name);
-                },
-                .template => {
-                    return try self.template(file_name);
-                },
-                .button => {
-                    return try self.button(file_name);
-                },
-                .card => {
-                    return try self.card(file_name);
-                },
-                .fetch => {
-                    return try self.fetch(file_name);
-                },
-                .page => {
-                    return try self.page(file_name);
-                },
-                .crudfull => {
-                    return self.crudfull();
-                },
-                .crud => {
-                    return self.crud();
-                },
-                .database => {
-                    return self.database();
-                },
-                else => {},
-            }
-        },
-        else => {},
+    if (cmd_type != .Gen) return error.NoCommand;
+    const gpa = self.allocator.*;
+    return switch (gen_type) {
+        .page => try render(gpa, page_template, file_name),
+        .component => try render(gpa, component_template, file_name),
+        .card => try render(gpa, card_template, file_name),
+        .button => try render(gpa, button_template, file_name),
+        .fetch => try render(gpa, fetch_template, file_name),
+        .crud => self.crud(),
+        .crudfull => self.crudfull(),
+        .database => self.database(),
+        .null => error.NoCommand,
+    };
+}
+
+test routeFromName {
+    const gpa = std.testing.allocator;
+    const cases = [_][2][]const u8{
+        .{ "About", "/about" },
+        .{ "UserCard", "/user-card" },
+        .{ "Page2Go", "/page2-go" },
+        .{ "my_page", "/my-page" },
+    };
+    for (cases) |case| {
+        const got = try routeFromName(gpa, case[0]);
+        defer gpa.free(got);
+        try std.testing.expectEqualStrings(case[1], got);
     }
-    return error.NoCommand;
+}
+
+test "vapor templates leave no placeholder behind" {
+    var gpa = std.testing.allocator;
+    const contents = Contents{ .allocator = &gpa };
+    inline for (.{ GenType.page, .component, .card, .button, .fetch }) |kind| {
+        const out = try contents.getContent(.Gen, kind, "UserCard");
+        defer gpa.free(out);
+        try std.testing.expect(std.mem.indexOf(u8, out, "__") == null);
+        try std.testing.expect(std.mem.indexOf(u8, out, "UserCard") != null);
+    }
 }
