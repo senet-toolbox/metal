@@ -156,17 +156,16 @@ const fetch_template =
     \\
     \\const std = @import("std");
     \\const Vapor = @import("vapor");
-    \\const Fetch = Vapor.Fetch.Fetch;
     \\const Text = Vapor.Text;
     \\
     \\/// Point this at your API.
     \\const url = "/api__ROUTE__";
     \\
-    \\var request: ?*Fetch = null;
+    \\var request: ?*Vapor.Fetch.Request = null;
     \\var body: []const u8 = "";
     \\
     \\pub fn load() void {
-    \\    const req = Fetch.fetch(url, .{ .method = .GET });
+    \\    const req = Vapor.fetch(url, .{});
     \\    req.handle(onResponse, .{});
     \\    request = req;
     \\}
