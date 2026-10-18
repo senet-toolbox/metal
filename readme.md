@@ -35,7 +35,10 @@ already on your PATH somewhere writable, it upgrades that copy in place.
 | `METAL_VERSION=1.2.0` | install a specific release |
 | `METAL_INSTALL_DIR=/usr/local/bin` | install elsewhere (run with sudo if it needs root) |
 
-`metal upgrade` re-runs the script.
+`metal upgrade` replaces the metal you ran, wherever it is installed, with the
+latest release (it says so if you are already on it). If that directory needs
+root, it tells you to run `sudo metal upgrade`; a Homebrew install is left to
+`brew upgrade metal`. `METAL_VERSION` works here too.
 
 ## Quick start
 
