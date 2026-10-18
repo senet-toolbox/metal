@@ -285,6 +285,16 @@ fn runCleanCommand() !u8 {
     return ExitCode.ok;
 }
 
+// ─── Upgrade ────────────────────────────────────────────────────────────────
+
+const metal_version = @import("build_options").version;
+const metal_repo_default = "senet-toolbox/metal";
+const install_script_url = "https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh";
+
+/// Replaces the metal binary that is running, wherever it lives, with the
+/// latest release (or `$METAL_VERSION`). install.sh does the download,
+/// checksum and atomic rename; this decides *which file* it replaces, and
+/// whether it should at all.
 fn runUpgradeCommand() u8 {
     std.debug.print("\n  {s}{s}metal upgrade{s}\n\n", .{
         Ansi.bold,
@@ -292,35 +302,214 @@ fn runUpgradeCommand() u8 {
         Ansi.reset,
     });
 
-    MetalUI.printStep("Upgrade", "fetching latest version...");
+    var exe_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const exe_len = std.process.executablePath(main_init.io, &exe_buf) catch |err| {
+        MetalUI.printError("Upgrade failed", "cannot find the running metal binary");
+        std.debug.print("  {s}{t}{s}\n\n", .{ Ansi.dim, err, Ansi.reset });
+        return ExitCode.failure;
+    };
+    const exe_path = exe_buf[0..exe_len];
+    const exe_dir = std.fs.path.dirname(exe_path) orelse ".";
 
+    switch (classifyInstall(exe_path)) {
+        .homebrew => {
+            MetalUI.printError("Installed with Homebrew", exe_path);
+            printHint("Upgrade it with:", "brew upgrade metal");
+            return ExitCode.failure;
+        },
+        .source_build => {
+            MetalUI.printError("This metal was built from source", exe_path);
+            printHint("Update it with:", "git pull && zig build");
+            return ExitCode.failure;
+        },
+        .renamed => {
+            MetalUI.printError("Not named metal", exe_path);
+            std.debug.print("  {s}metal upgrade installs {s}/metal; rename this binary or reinstall with install.sh.{s}\n\n", .{ Ansi.dim, exe_dir, Ansi.reset });
+            return ExitCode.failure;
+        },
+        .standalone => {},
+    }
+
+    // An explicit version is honoured as asked, downgrades included; the
+    // latest release only ever moves metal forward.
+    const requested = main_init.environ_map.get("METAL_VERSION");
+    var latest_buf: [64]u8 = undefined;
+    const target: []const u8 = if (requested) |v| std.mem.trimStart(u8, v, "v") else blk: {
+        MetalUI.printStep("Checking", "latest release");
+        const repo = main_init.environ_map.get("METAL_REPO") orelse metal_repo_default;
+        break :blk latestReleaseVersion(repo, &latest_buf) catch {
+            MetalUI.printError("Upgrade failed", "could not determine the latest release (is github.com reachable?)");
+            return ExitCode.failure;
+        };
+    };
+
+    const current_v = comptime std.SemanticVersion.parse(metal_version) catch
+        @compileError("build.zig.zon .version is not semver: " ++ metal_version);
+    const target_v = std.SemanticVersion.parse(target) catch {
+        MetalUI.printError("Not a version", target);
+        return ExitCode.failure;
+    };
+    const order = current_v.order(target_v);
+    if (order == .eq or (order == .gt and requested == null)) {
+        MetalUI.printSuccess("Up to date", "metal " ++ metal_version);
+        if (order == .gt) {
+            std.debug.print("  {s}(newer than the latest release, {s}){s}\n", .{ Ansi.dim, target, Ansi.reset });
+        }
+        std.debug.print("\n", .{});
+        return ExitCode.ok;
+    }
+
+    // Refuse before downloading anything rather than half-install.
+    checkWritable(exe_dir) catch |err| {
+        MetalUI.printError("Cannot write to", exe_dir);
+        std.debug.print("  {s}{t}{s}\n", .{ Ansi.dim, err, Ansi.reset });
+        printHint("Either run it with sudo:", "sudo metal upgrade");
+        std.debug.print("  {s}or install a copy you own in ~/.local/bin, then delete {s}:{s}\n", .{ Ansi.dim, exe_path, Ansi.reset });
+        std.debug.print("    {s}curl -fsSL {s} | sh{s}\n\n", .{ Ansi.bright_white, install_script_url, Ansi.reset });
+        return ExitCode.failure;
+    };
+
+    const from_to = std.fmt.allocPrint(allocator, "{s} → {s}  ({s})", .{ metal_version, target, exe_path }) catch {
+        MetalUI.printError("Upgrade failed", "out of memory");
+        return ExitCode.failure;
+    };
+    defer allocator.free(from_to);
+    MetalUI.printStep("Upgrading", from_to);
+
+    // Arguments go in as positional parameters, not spliced into the script,
+    // so no path can be read as shell syntax. Fetching the script first means
+    // a failed download stops here instead of piping nothing into sh.
+    const script =
+        \\set -e
+        \\s=$(curl -fsSL "$3")
+        \\METAL_INSTALL_DIR="$1" METAL_VERSION="$2" METAL_UPGRADE=1 sh -c "$s"
+    ;
+    // METAL_INSTALL_SCRIPT (any URL curl takes, file:// included) is for
+    // testing an install.sh that is not on main yet.
+    const install_url = main_init.environ_map.get("METAL_INSTALL_SCRIPT") orelse install_script_url;
     var child = std.process.spawn(main_init.io, .{
-        .argv = &.{ "bash", "-c", "set -o pipefail; curl -fsSL https://raw.githubusercontent.com/senet-toolbox/metal/main/install.sh | sh" },
+        .argv = &.{ "sh", "-c", script, "sh", exe_dir, target, install_url },
         .stdout = .inherit,
         .stderr = .inherit,
     }) catch {
-        MetalUI.printError("Upgrade failed", "could not run install script");
+        MetalUI.printError("Upgrade failed", "could not run sh");
         return ExitCode.failure;
     };
-
-    const result = child.wait(main_init.io) catch {
-        MetalUI.printError("Upgrade failed", "process error");
+    const term = child.wait(main_init.io) catch {
+        MetalUI.printError("Upgrade failed", "install script did not finish");
         return ExitCode.failure;
     };
-    switch (result) {
-        .exited => |code| {
-            if (code == 0) {
-                MetalUI.printSuccess("Upgrade", "metal has been updated to the latest version");
-                return ExitCode.ok;
-            }
-            MetalUI.printError("Upgrade failed", "install script exited with an error");
-            return ExitCode.failure;
-        },
-        else => {
-            MetalUI.printError("Upgrade failed", "unexpected process termination");
-            return ExitCode.failure;
-        },
+    if (term != .exited or term.exited != 0) {
+        MetalUI.printError("Upgrade failed", "install script reported an error (metal was not changed)");
+        return ExitCode.failure;
     }
+
+    // Ask the new binary itself, so a wrong file or stale copy cannot pass.
+    if (!binaryReportsVersion(exe_path, target)) {
+        MetalUI.printWarning("Installed, but", "the new binary did not report the expected version");
+        return ExitCode.failure;
+    }
+    const done = std.fmt.allocPrint(allocator, "metal {s}", .{target}) catch return ExitCode.ok;
+    defer allocator.free(done);
+    MetalUI.printSuccess("Upgraded", done);
+    std.debug.print("\n", .{});
+    return ExitCode.ok;
+}
+
+const InstallKind = enum { standalone, homebrew, source_build, renamed };
+
+/// What kind of install `path` (the resolved path of the running binary) is.
+fn classifyInstall(path: []const u8) InstallKind {
+    const brew_markers = [_][]const u8{ "/Cellar/", "/opt/homebrew/", "/home/linuxbrew/" };
+    for (brew_markers) |m| {
+        if (std.mem.indexOf(u8, path, m) != null) return .homebrew;
+    }
+    if (std.mem.indexOf(u8, path, "/zig-out/") != null) return .source_build;
+    if (!std.mem.eql(u8, std.fs.path.basename(path), "metal")) return .renamed;
+    return .standalone;
+}
+
+test classifyInstall {
+    try std.testing.expectEqual(InstallKind.homebrew, classifyInstall("/opt/homebrew/Cellar/metal/2.0.0/bin/metal"));
+    try std.testing.expectEqual(InstallKind.homebrew, classifyInstall("/usr/local/Cellar/metal/2.0.0/bin/metal"));
+    try std.testing.expectEqual(InstallKind.homebrew, classifyInstall("/home/linuxbrew/.linuxbrew/bin/metal"));
+    try std.testing.expectEqual(InstallKind.source_build, classifyInstall("/home/me/metal/zig-out/bin/metal"));
+    try std.testing.expectEqual(InstallKind.renamed, classifyInstall("/usr/local/bin/metal-old"));
+    try std.testing.expectEqual(InstallKind.standalone, classifyInstall("/usr/local/bin/metal"));
+    try std.testing.expectEqual(InstallKind.standalone, classifyInstall("/Users/me/.local/bin/metal"));
+}
+
+/// `https://github.com/o/r/releases/tag/v1.2.3` → `1.2.3`; null for any
+/// other URL, e.g. `/releases` itself when the repo has no release yet.
+fn versionFromReleaseUrl(url: []const u8) ?[]const u8 {
+    const marker = "/releases/tag/v";
+    const i = std.mem.lastIndexOf(u8, url, marker) orelse return null;
+    const v = std.mem.trim(u8, url[i + marker.len ..], " \r\n");
+    if (v.len == 0 or std.mem.indexOfScalar(u8, v, '/') != null) return null;
+    return v;
+}
+
+test versionFromReleaseUrl {
+    try std.testing.expectEqualStrings("1.2.3", versionFromReleaseUrl("https://github.com/senet-toolbox/metal/releases/tag/v1.2.3").?);
+    try std.testing.expectEqualStrings("2.0.0", versionFromReleaseUrl("https://github.com/o/r/releases/tag/v2.0.0\n").?);
+    try std.testing.expectEqual(null, versionFromReleaseUrl("https://github.com/o/r/releases"));
+    try std.testing.expectEqual(null, versionFromReleaseUrl("https://github.com/o/r/releases/tag/v"));
+}
+
+/// The newest release's version, read from where GitHub's `releases/latest`
+/// redirects (no API, so no rate limit). Same method as install.sh.
+fn latestReleaseVersion(repo: []const u8, out: []u8) ![]const u8 {
+    const url = try std.fmt.allocPrint(allocator, "https://github.com/{s}/releases/latest", .{repo});
+    defer allocator.free(url);
+    const result = try std.process.run(allocator, main_init.io, .{
+        .argv = &.{ "curl", "-fsSLI", "-o", "/dev/null", "-w", "%{url_effective}", url },
+        .stdout_limit = .limited(4096),
+        .stderr_limit = .limited(4096),
+    });
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+    if (result.term != .exited or result.term.exited != 0) return error.CurlFailed;
+    const v = versionFromReleaseUrl(result.stdout) orelse return error.NoRelease;
+    if (v.len > out.len) return error.NoRelease;
+    @memcpy(out[0..v.len], v);
+    return out[0..v.len];
+}
+
+/// Creates and removes a file in `dir`: the same permission the final
+/// rename-over needs, tested before anything is downloaded.
+fn checkWritable(dir: []const u8) !void {
+    const probe = try std.fs.path.join(allocator, &.{ dir, ".metal-upgrade-probe" });
+    defer allocator.free(probe);
+    const cwd = std.Io.Dir.cwd();
+    const file = try cwd.createFile(main_init.io, probe, .{ .truncate = true });
+    file.close(main_init.io);
+    try cwd.deleteFile(main_init.io, probe);
+}
+
+fn binaryReportsVersion(exe_path: []const u8, version: []const u8) bool {
+    const result = std.process.run(allocator, main_init.io, .{
+        .argv = &.{ exe_path, "version" },
+        .stdout_limit = .limited(64 * 1024),
+        .stderr_limit = .limited(64 * 1024),
+    }) catch return false;
+    defer allocator.free(result.stdout);
+    defer allocator.free(result.stderr);
+    const needle = std.fmt.allocPrint(allocator, "v{s}", .{version}) catch return false;
+    defer allocator.free(needle);
+    // `metal version` prints `v<version>` followed by a colour reset or a
+    // newline, never more digits; check the next byte so 2.0.1 is not 2.0.10.
+    for ([_][]const u8{ result.stdout, result.stderr }) |out| {
+        var at: usize = 0;
+        while (std.mem.indexOfPos(u8, out, at, needle)) |i| : (at = i + 1) {
+            const next = i + needle.len;
+            if (next == out.len or !(std.ascii.isDigit(out[next]) or out[next] == '.')) return true;
+        }
+    }
+    return false;
+}
+
+fn printHint(lead: []const u8, command: []const u8) void {
+    std.debug.print("  {s}{s}{s}\n    {s}{s}{s}\n\n", .{ Ansi.dim, lead, Ansi.reset, Ansi.bright_white, command, Ansi.reset });
 }
 
 fn callCommand(cmd: []const []const u8) !void {

@@ -114,11 +114,16 @@ case ":$PATH:" in
         fi
         ;;
     *)
+        # An upgrade replaced the binary the user just ran; PATH is theirs.
+        [ -n "${METAL_UPGRADE:-}" ] && exit 0
         say ""
         say "$METAL_INSTALL_DIR is not on your PATH. Add it, e.g.:"
         say "  echo 'export PATH=\"$METAL_INSTALL_DIR:\$PATH\"' >> ~/.$(basename "${SHELL:-sh}")rc"
         ;;
 esac
+
+# `metal upgrade` sets METAL_UPGRADE: the user already has metal running.
+[ -n "${METAL_UPGRADE:-}" ] && exit 0
 
 if ! command -v zig >/dev/null 2>&1; then
     say ""
