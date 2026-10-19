@@ -29,11 +29,15 @@ macOS (Apple Silicon and Intel) and Linux (x86_64 and arm64). The script
 picks the build for your machine, verifies its SHA-256 against the release's
 `checksums.txt`, and installs to `~/.local/bin` — no sudo. If `metal` is
 already on your PATH somewhere writable, it upgrades that copy in place.
+When `~/.local/bin` is not on your PATH, it adds one line to your shell's
+startup file (`.zshrc`, `.bashrc`/`.bash_profile`, fish's `config.fish`, or
+`.profile`) so new terminals find `metal`.
 
 | variable | effect |
 | --- | --- |
 | `METAL_VERSION=1.2.0` | install a specific release |
 | `METAL_INSTALL_DIR=/usr/local/bin` | install elsewhere (run with sudo if it needs root) |
+| `METAL_NO_MODIFY_PATH=1` | leave shell startup files alone |
 
 `metal upgrade` replaces the metal you ran, wherever it is installed, with the
 latest release (it says so if you are already on it). If that directory needs

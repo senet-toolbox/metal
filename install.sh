@@ -8,6 +8,9 @@
 #   METAL_INSTALL_DIR  where to put the binary (default: the directory of an
 #                      existing writable `metal` on PATH, else ~/.local/bin)
 #   METAL_REPO         GitHub repository to download from
+#   METAL_NO_MODIFY_PATH  set to leave shell startup files alone. Otherwise,
+#                      when ~/.local/bin is not on PATH, one line adding it is
+#                      appended to your shell's startup file (once).
 #
 # No sudo: the default directory is your own. To install system-wide, run
 #   curl -fsSL … | sudo METAL_INSTALL_DIR=/usr/local/bin sh
@@ -84,12 +87,14 @@ tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
 
 # Upgrade in place when an existing metal is on PATH and writable, so a new
 # copy does not end up shadowed by the old one.
+chosen_dir=
 if [ -z "${METAL_INSTALL_DIR:-}" ]; then
     existing=$(command -v metal 2>/dev/null || true)
     if [ -n "$existing" ] && [ -w "$(dirname "$existing")" ]; then
         METAL_INSTALL_DIR=$(dirname "$existing")
     else
         METAL_INSTALL_DIR="$HOME/.local/bin"
+        chosen_dir=1
     fi
 fi
 
@@ -104,6 +109,37 @@ mv -f "$METAL_INSTALL_DIR/.metal.new" "$METAL_INSTALL_DIR/metal"
 
 say "Installed metal $version to $METAL_INSTALL_DIR/metal"
 
+# The startup file the user's login shell reads, and the line that puts
+# $1 on PATH in it.
+shell_name=$(basename "${SHELL:-sh}")
+profile_for_shell() {
+    case "$shell_name" in
+        zsh) printf '%s\n' "${ZDOTDIR:-$HOME}/.zshrc" ;;
+        bash)
+            if [ "$os" = darwin ]; then
+                # Terminal.app starts login shells, which read only the first
+                # of these that exists; creating .bash_profile next to an
+                # existing .profile would stop .profile being read.
+                for f in "$HOME/.bash_profile" "$HOME/.bash_login" "$HOME/.profile"; do
+                    if [ -f "$f" ]; then printf '%s\n' "$f"; return; fi
+                done
+                printf '%s\n' "$HOME/.bash_profile"
+            else
+                printf '%s\n' "$HOME/.bashrc"
+            fi
+            ;;
+        fish) printf '%s\n' "${XDG_CONFIG_HOME:-$HOME/.config}/fish/config.fish" ;;
+        *) printf '%s\n' "$HOME/.profile" ;;
+    esac
+}
+path_line() {
+    case "$shell_name" in
+        fish) printf 'set -gx PATH "%s" $PATH\n' "$1" ;;
+        *) printf 'export PATH="%s:$PATH"\n' "$1" ;;
+    esac
+}
+
+metal_cmd=metal
 found=$(command -v metal 2>/dev/null || true)
 case ":$PATH:" in
     *":$METAL_INSTALL_DIR:"*)
@@ -116,9 +152,35 @@ case ":$PATH:" in
     *)
         # An upgrade replaced the binary the user just ran; PATH is theirs.
         [ -n "${METAL_UPGRADE:-}" ] && exit 0
+
+        profile=$(profile_for_shell)
+        # $HOME-relative, so the line still works in dotfiles synced to
+        # another machine.
+        path_dir=$METAL_INSTALL_DIR
+        case "$path_dir" in "$HOME"/*) path_dir="\$HOME${path_dir#"$HOME"}" ;; esac
+        line=$(path_line "$path_dir")
+        marker="# added by the metal installer"
         say ""
-        say "$METAL_INSTALL_DIR is not on your PATH. Add it, e.g.:"
-        say "  echo 'export PATH=\"$METAL_INSTALL_DIR:\$PATH\"' >> ~/.$(basename "${SHELL:-sh}")rc"
+        # Only for the directory chosen here: one the user named is theirs.
+        if [ -n "$chosen_dir" ] && [ -z "${METAL_NO_MODIFY_PATH:-}" ]; then
+            if grep -qsF "$marker" "$profile"; then
+                say "$METAL_INSTALL_DIR is already added to PATH in $profile."
+            elif mkdir -p "$(dirname "$profile")" 2>/dev/null &&
+                printf '\n%s\n%s\n' "$marker" "$line" >>"$profile" 2>/dev/null; then
+                say "Added $METAL_INSTALL_DIR to PATH in $profile."
+            else
+                say "Could not write $profile. Add this line to your shell's startup file:"
+                say "  $line"
+            fi
+            say "New terminals will find metal. For this one, run:"
+            say "  $line"
+        else
+            say "$METAL_INSTALL_DIR is not on your PATH. Add this line to $profile:"
+            say "  $line"
+        fi
+        # This terminal cannot see the change yet, so spell out the path.
+        metal_cmd="$METAL_INSTALL_DIR/metal"
+        case "$metal_cmd" in "$HOME"/*) metal_cmd="~${metal_cmd#"$HOME"}" ;; esac
         ;;
 esac
 
@@ -131,4 +193,4 @@ if ! command -v zig >/dev/null 2>&1; then
 fi
 
 say ""
-say "Get started:  metal vapor create my-app && cd my-app && metal vapor run"
+say "Get started:  $metal_cmd vapor create my-app && cd my-app && $metal_cmd vapor run"
