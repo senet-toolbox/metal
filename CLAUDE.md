@@ -3,33 +3,32 @@
 This file exists so a fresh session starts informed instead of re-deriving.
 **Start with "Current task" below**; the rest is durable background.
 
-## Current task (2026-10-19): new apps on vapor 3.1.1, release metal 2.0.1
+## Current task (2026-11-02): release metal 2.2.0, new apps on vapor 3.5.2
 
-vapor **3.1.1** was released on 2026-10-19 (tag `v3.1.1`, commit `5cedfee`).
-It's a patch release with fixes only:
-- Fired `Vapor.timeout`s were never freed in the browser.
-- A declared `.transition(...)` never animated on state changes; now it does.
-- `.morph(true)` did nothing.
-- Two migrate rewrites.
+`vapor_ref` is `v3.5.2` and `build.zig.zon` is **2.2.0**, committed locally
+and not tagged: ask before pushing the `v2.2.0` tag. 3.5.2 is the version
+the user named; vapor also has v3.6.x and v3.7.x tags.
 
-metal 2.0.0 still scaffolds apps on `v3.1.0`, so new apps miss these fixes.
+Every 3.1.x vapor crashes `zig build -Dgenerate=true` on x86_64 Linux
+(`index out of bounds: index 170, len 5` in css/values.zig, an unset
+`position_type`; macOS and aarch64 happen to read zeros). vapor `0f8258a`
+fixed it, first in v3.2.1. That is why CI's "Default create uses the pinned
+vapor release" step failed on 2.1.0, which pins v3.1.0. Check a vapor bump
+on x86_64 Linux, not only macOS: Docker `--platform linux/amd64` with a
+cross-built `-Dtarget=x86_64-linux-musl` metal works.
 
 Policy (agreed with the user): metal **pins** a tested vapor tag and moves
 it in a metal release whenever vapor releases. It never floats on "latest".
 release.yml already refuses `"main"`. Patch releases of vapor make patch
-releases of metal.
+releases of metal, and minor releases make minor ones.
 
-1. `pub const vapor_ref = "v3.1.1";` in `src/main.zig` (doc comment
-   above it). Tarball hash, if needed by hand:
-   `vapor-3.1.1-VGoNdYnwEwAoDDctBmqdky3a-6O9NZ4_FBhGUqYWTzEV`.
-2. No template migration is expected (3.1.1 has no API changes). Verify:
-   `metal vapor create` a fresh app → `zig build` → `zig build -Dgenerate=true`
-   → `metal run` serves it, and every `metal gen <kind>` output compiles
-   and renders, browser-checked (see "Testing helpers").
-3. Bump `build.zig.zon` to **2.0.1**, commit. Ask the user before tagging
-   `v2.0.1` and pushing; the release workflow builds and uploads.
-   `main` is one commit ahead of origin (`231ed44`, install.sh PATH), so
-   that ships too.
+Verified on 3.5.2 (2026-11-02): `metal vapor create` fetches
+`vapor-3.5.2-VGoNddqMFABReKGR2dzuF7GjK3Dq_Ip2WzBWfl_k8NEd`, then `zig build`
+and `zig build -Dgenerate=true` pass on macOS and x86_64 Linux. Every
+`metal vapor gen` kind compiles when referenced (CI's Showcase page), and
+`/`, `/about` and `/showcase` render in headless Chrome under `metal vapor
+run`.
+
 4. Worth adding: a `metal vapor upgrade` (or similar) that moves an
    *existing* app to metal's `vapor_ref` (`zig fetch --save=vapor
    git+https://github.com/senet-toolbox/vapor#<ref>`, then point at
@@ -43,7 +42,7 @@ assembler-chat's playground failed against it. Now the watcher starts the one
 executable in `zig-out/bin` (or metal.zon `.run_command`) after each good
 build and kills it before the next; Ctrl-C forwards SIGTERM to it. Checked on
 assembler-backend: up in 2s, new PID after an edit, gone after SIGTERM.
-vapor_ref was left at v3.1.0; the vapor bump above is still to do.
+vapor_ref was left at v3.1.0 in 2.1.0; 2.2.0 moves it.
 
 ### Done (2026-10-17): metal 2.0.0
 
