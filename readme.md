@@ -74,7 +74,7 @@ metal <framework> <command> [options]
 | command | what it does |
 | --- | --- |
 | `create <name>` | scaffold a new project into `<name>/` |
-| `run` | build, serve, watch, live-reload |
+| `run` | build, serve, watch, live-reload (backends: rebuild and restart) |
 | `build` | build once |
 | `release` | build → wasm-opt → brotli |
 | `add <package>` | `zig fetch --save` a known package |
@@ -121,6 +121,21 @@ per type (`page` → `src/routes/`, components → `src/components/`) unless
 
 An explicit `--port` that is already in use is an error. A default port that is
 in use falls back to the next free port and says so.
+
+### Backends
+
+A reverb or canopy app is its own server, so `metal reverb run` serves
+nothing itself. It builds, starts the executable `zig build` installed into
+`zig-out/bin`, and on each change rebuilds and restarts it. The server binds
+its own port; metal's `--port` and `--host` don't apply to it. If
+`zig-out/bin` holds more than one executable, name the server in
+`metal.zon`:
+
+```zig
+.{
+    .run_command = .{ "zig-out/bin/my-server" },
+}
+```
 
 ### Binding to the network
 

@@ -2061,12 +2061,13 @@ fn run() !u8 {
             // build doesn't leave a zombie child.
             proc_state.install();
 
-            // Backend frameworks (reverb, canopy) are their own server —
-            // metal only watches for file changes and rebuilds.  The user
-            // starts/restarts their server themselves, so we skip port
-            // probing, the dev HTTP server, and run_after_build entirely.
+            // Backend frameworks (reverb, canopy) are their own server.
+            // metal rebuilds on change and restarts that server: the
+            // metal.zon `.run_command`, or else the one executable `zig
+            // build` installed. It binds no port itself, so there is no
+            // probing and no dev HTTP server.
             if (framework_type == .reverb or framework_type == .canopy) {
-                // Use the configured/default port for display only (no bind).
+                // The app binds its own port; this one is only displayed.
                 const display_port: u16 = blk: {
                     if (run_options.port) |p| break :blk p;
                     if (loaded_cfg) |lc| {
@@ -2084,7 +2085,8 @@ fn run() !u8 {
                     .process_environ = main_init.minimal.environ,
                     .start_websocket_server = false,
                     .notify_websocket = null,
-                    .run_after_build = null,
+                    .run_after_build = if (loaded_cfg) |lc| lc.config.run_command else null,
+                    .run_installed_exe = true,
                 }) catch |err| {
                     MetalUI.printError("Watcher failed", @errorName(err));
                     return ExitCode.failure;

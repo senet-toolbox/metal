@@ -33,6 +33,10 @@ pub const Config = struct {
     /// for it to exit.  The process is killed before the next rebuild.
     /// Useful for backend frameworks that are their own server.
     run_after_build: ?[]const []const u8 = null,
+    /// With no `run_after_build`, run the one executable `zig build`
+    /// installed into `zig-out/bin`, the same way. A backend's server is
+    /// that executable, so `metal reverb run` needs no configuration.
+    run_installed_exe: bool = false,
     /// Build once before watching. Off when the caller has just built, as
     /// `metal vapor run` does before starting its server.
     initial_build: bool = true,
@@ -61,6 +65,8 @@ const WatchContext = struct {
     last_mod_times: std.StringHashMap(i128),
     child_process: ?std.process.Child = null,
     is_first_build: bool = true,
+    /// `findInstalledExe` explains a miss once, not after every rebuild.
+    warned_about_exe: bool = false,
     input_state: *InputState,
     threaded: std.Io.Threaded = undefined,
     io: std.Io = undefined,
@@ -194,11 +200,12 @@ const WatchContext = struct {
                     // after a successful build (don't wait — it runs until
                     // killed on next rebuild).
                     if (self.config.run_after_build) |run_argv| {
-                        const run_child = try std.process.spawn(self.io, .{
-                            .argv = run_argv,
-                        });
-                        proc_state.child_pid.store(run_child.id.?, .release);
-                        self.child_process = run_child;
+                        self.spawnServer(run_argv);
+                    } else if (self.config.run_installed_exe) {
+                        if (self.findInstalledExe()) |exe_path| {
+                            defer self.allocator.free(exe_path);
+                            self.spawnServer(&.{exe_path});
+                        }
                     }
                 } else {
                     // On failure, we might want to show the error
@@ -367,6 +374,71 @@ const WatchContext = struct {
     //     }
     // }
 
+    /// Starts the app's own server. A failure is reported and the watcher
+    /// carries on, so the next save can fix whatever stopped it.
+    fn spawnServer(self: *WatchContext, argv: []const []const u8) void {
+        // stdin stays with metal: the keyboard shortcuts read it.
+        const child = std.process.spawn(self.io, .{
+            .argv = argv,
+            .stdin = .ignore,
+        }) catch |err| {
+            std.debug.print("{s}Could not start {s}: {s}{s}\n", .{
+                ui.Ansi.bright_red,
+                argv[0],
+                @errorName(err),
+                ui.Ansi.reset,
+            });
+            return;
+        };
+        proc_state.child_pid.store(child.id.?, .release);
+        self.child_process = child;
+        std.debug.print("{s}Started {s}{s}\n", .{ ui.Ansi.dim, argv[0], ui.Ansi.reset });
+    }
+
+    /// The path of the one executable in `zig-out/bin`, owned by the caller.
+    /// Null, said once, when there is none or more than one: metal cannot
+    /// tell which is the server then, and metal.zon's `.run_command` can.
+    fn findInstalledExe(self: *WatchContext) ?[]u8 {
+        const bin_dir = "zig-out/bin";
+        var dir = std.Io.Dir.cwd().openDir(self.io, bin_dir, .{ .iterate = true }) catch {
+            self.warnNoExe("zig build installed nothing into zig-out/bin");
+            return null;
+        };
+        defer dir.close(self.io);
+
+        var found: ?[]u8 = null;
+        var it = dir.iterate();
+        while (it.next(self.io) catch null) |entry| {
+            if (entry.kind != .file or !isExecutable(self.io, dir, entry.name)) continue;
+            if (found) |first| {
+                self.allocator.free(first);
+                self.warnNoExe("zig-out/bin holds more than one executable");
+                return null;
+            }
+            found = std.fs.path.join(self.allocator, &.{ bin_dir, entry.name }) catch return null;
+        }
+        if (found == null) self.warnNoExe("zig build installed no executable into zig-out/bin");
+        return found;
+    }
+
+    fn warnNoExe(self: *WatchContext, reason: []const u8) void {
+        if (self.warned_about_exe) return;
+        self.warned_about_exe = true;
+        std.debug.print(
+            "{s}Not starting a server: {s}.{s}\n" ++
+                "{s}Name it in metal.zon: .run_command = .{{ \"zig-out/bin/<name>\" }}{s}\n",
+            .{ ui.Ansi.bright_yellow, reason, ui.Ansi.reset, ui.Ansi.dim, ui.Ansi.reset },
+        );
+    }
+
+    /// The box claims a server, so it shows only when one is running.
+    fn printReady(self: *WatchContext) void {
+        const serving = self.child_process != null or
+            self.config.start_websocket_server or
+            self.config.notify_websocket != null;
+        if (serving) ui.serverReady(self.config.app_port);
+    }
+
     fn openAppUrl(self: *WatchContext) !void {
         const url = try std.fmt.allocPrint(self.allocator, "http://{s}:{d}", .{
             self.config.app_host,
@@ -402,6 +474,15 @@ const WatchContext = struct {
         );
     }
 };
+
+fn isExecutable(io: std.Io, dir: std.Io.Dir, name: []const u8) bool {
+    if (builtin.os.tag == .windows) {
+        return std.ascii.endsWithIgnoreCase(name, ".exe");
+    } else {
+        const stat = dir.statFile(io, name, .{}) catch return false;
+        return stat.permissions.toMode() & 0o111 != 0;
+    }
+}
 
 fn consumeInput(state: *InputState) RequestedInput {
     std.Io.Threaded.mutexLock(&state.mutex);
@@ -488,7 +569,7 @@ fn watchFiles(self: *WatchContext) !void {
     if (self.config.initial_build) try self.buildAndRun();
 
     // Show server ready message
-    ui.serverReady(self.config.app_port);
+    self.printReady();
     std.debug.print(
         "{s}Shortcuts:{s} {s}r{s} reload  {s}o{s} open  {s}c{s} clear  {s}?{s} help  {s}q{s} quit\n",
         .{
@@ -567,7 +648,7 @@ fn watchFiles(self: *WatchContext) !void {
 
         if (requested.clear) {
             std.debug.print("{s}", .{ui.Ansi.clear_screen});
-            ui.serverReady(self.config.app_port);
+            self.printReady();
             std.debug.print("{s}Watching for changes...{s}\n", .{ ui.Ansi.dim, ui.Ansi.reset });
         }
 

@@ -35,6 +35,16 @@ releases of metal.
    git+https://github.com/senet-toolbox/vapor#<ref>`, then point at
    `zig build migrate` for majors). Discuss with the user first.
 
+### Done (2026-11-02): metal 2.1.0, `metal reverb run` starts the server
+
+Before 2.1.0 the reverb/canopy branch of `run` only rebuilt (`run_after_build
+= null`) yet printed "Server Ready :8080", so nothing listened and
+assembler-chat's playground failed against it. Now the watcher starts the one
+executable in `zig-out/bin` (or metal.zon `.run_command`) after each good
+build and kills it before the next; Ctrl-C forwards SIGTERM to it. Checked on
+assembler-backend: up in 2s, new PID after an edit, gone after SIGTERM.
+vapor_ref was left at v3.1.0; the vapor bump above is still to do.
+
 ### Done (2026-10-17): metal 2.0.0
 
 New apps on vapor 3.1.0 (templates migrated, `metal gen` strings checked).

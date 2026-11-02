@@ -12,6 +12,7 @@
 //!         .file_extensions = .{ ".zig", ".html", ".css" },
 //!         .exclude_dirs = .{ "zig-cache", "zig-out", "node_modules" },
 //!         .build_command = .{ "zig", "build" },
+//!         .run_command = .{ "zig-out/bin/server" },
 //!     }
 
 const std = @import("std");
@@ -25,6 +26,9 @@ pub const MetalConfig = struct {
     file_extensions: ?[]const []const u8 = null,
     exclude_dirs: ?[]const []const u8 = null,
     build_command: ?[]const []const u8 = null,
+    /// What `metal reverb run` starts after each build. Unset, it starts
+    /// the one executable in `zig-out/bin`.
+    run_command: ?[]const []const u8 = null,
 };
 
 pub const LoadResult = struct {
