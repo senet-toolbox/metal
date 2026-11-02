@@ -863,7 +863,7 @@ fn linkLocalVapor(project_dir: std.Io.Dir, dir_name: []const u8, vapor_abs: []co
 ///
 /// Must name a vapor tag (`git tag` name, e.g. "v3.1.0"); release.yml refuses
 /// "main", which would let new apps float.
-pub const vapor_ref = "v3.5.2";
+pub const vapor_ref = "v3.7.1";
 
 const Packages = enum {
     auth,

@@ -3,11 +3,12 @@
 This file exists so a fresh session starts informed instead of re-deriving.
 **Start with "Current task" below**; the rest is durable background.
 
-## Current task (2026-11-02): release metal 2.2.0, new apps on vapor 3.5.2
+## Current task (2026-11-02): release metal 2.2.0, new apps on vapor 3.7.1
 
-`vapor_ref` is `v3.5.2` and `build.zig.zon` is **2.2.0**, committed locally
-and not tagged: ask before pushing the `v2.2.0` tag. 3.5.2 is the version
-the user named; vapor also has v3.6.x and v3.7.x tags.
+`vapor_ref` is `v3.7.1` (vapor's newest tag) and `build.zig.zon` is
+**2.2.0**, committed locally and not tagged: ask before pushing the `v2.2.0`
+tag. 3.6.0 changed what `.duration(ms)` animates (looks only, not size);
+the scaffold's Page.zig animates a transform and colours, which stay.
 
 Every 3.1.x vapor crashes `zig build -Dgenerate=true` on x86_64 Linux
 (`index out of bounds: index 170, len 5` in css/values.zig, an unset
@@ -22,9 +23,10 @@ it in a metal release whenever vapor releases. It never floats on "latest".
 release.yml already refuses `"main"`. Patch releases of vapor make patch
 releases of metal, and minor releases make minor ones.
 
-Verified on 3.5.2 (2026-11-02): `metal vapor create` fetches
-`vapor-3.5.2-VGoNddqMFABReKGR2dzuF7GjK3Dq_Ip2WzBWfl_k8NEd`, then `zig build`
-and `zig build -Dgenerate=true` pass on macOS and x86_64 Linux. Every
+Verified on 3.7.1 (2026-11-02): `metal vapor create` fetches
+`vapor-3.7.1-VGoNdbUFFQCRwfRib1ZCeDcQwNIgPRX8iSf96Z91eieV`, then `zig build`
+and `zig build -Dgenerate=true` pass on macOS and x86_64 Linux (CI on a
+branch, via workflow_dispatch). Every
 `metal vapor gen` kind compiles when referenced (CI's Showcase page), and
 `/`, `/about` and `/showcase` render in headless Chrome under `metal vapor
 run`.
